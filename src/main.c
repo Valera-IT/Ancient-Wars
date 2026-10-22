@@ -2501,24 +2501,22 @@ static void hud_part1(u8 part)
     Unit *U = &un[view];
     char b[12];
     u8 k;
-    if (part == 0) {                    /* level, bars */
+    if (part == 0) {                    /* big level (or respawn countdown), segmented bars */
         u16 need = 140 + times(60, H->lvl);
-        if (U->on) { b[0] = 'L'; num(H->lvl, 2, b + 1); }
-        else { b[0] = 'R'; num(divs(H->respawn + 59, 60), 2, b + 1); }   /* respawn countdown */
-        textW(5, 27, b);
-        bar_tiles(10, 24, 5, U->on ? U->hp : 0, U->hpmax, T_HPBAR);
-        num(U->on ? U->hp : 0, 4, b);
-        textW(15, 24, b);
-        bar_tiles(10, 25, 5, H->mana, H->manamax, T_MPBAR);
-        num(H->mana, 4, b);
-        textW(15, 25, b);
-        bar_tiles(10, 26, 5, H->lvl >= 16 ? 1 : H->xp, H->lvl >= 16 ? 1 : need, T_XPBAR);
-        b[0] = ' ';
-        b[1] = H->pts && !H->bot && (vcount & 32) ? '+' : ' ';   /* skill points to spend */
-        b[2] = H->pts && !H->bot && (vcount & 32) ? '0' + H->pts : ' ';
-        b[3] = ' ';
-        b[4] = 0;
-        textW(15, 26, b);
+        u16 v = U->on ? H->lvl : divs(H->respawn + 59, 60);
+        textW(8, 24, U->on ? "LVL" : "RES");
+        num(v > 99 ? 99 : v, 2, b);
+        for (k = 0; k < 2; k++) {
+            wtile(8 + k, 25, ATTR(1, 1, T_BIGD + ((b[k] - '0') << 1)));
+            wtile(8 + k, 26, ATTR(1, 1, T_BIGD + ((b[k] - '0') << 1) + 1));
+        }
+        bar_tiles(12, 24, 6, U->on ? U->hp : 0, U->hpmax, T_HPBAR);
+        bar_tiles(12, 25, 6, H->mana, H->manamax, T_MPBAR);
+        bar_tiles(12, 26, 6, H->lvl >= 16 ? 1 : H->xp, H->lvl >= 16 ? 1 : need, T_XPBAR);
+        b[0] = H->pts && !H->bot && (vcount & 32) ? '+' : ' ';   /* skill points to spend */
+        b[1] = H->pts && !H->bot && (vcount & 32) ? '0' + H->pts : ' ';
+        b[2] = 0;
+        textW(12, 27, b);
         return;
     }
     if (part == 1) { abilities(20, 3, T_SKI); return; }
@@ -2526,12 +2524,12 @@ static void hud_part1(u8 part)
         u8 n = 0;
         b[0] = '$';
         num(H->gold > 99999 ? 99999 : H->gold, 5, b + 1);
-        textW(9, 27, b);
+        textW(5, 27, b);
         if (H->items & IT_BLINK) {
-            b[0] = ' '; b[1] = 'Z';
-            if (H->cd[4]) num(divs(H->cd[4] + 59, 60), 2, b + 2); else { b[2] = 'O'; b[3] = 'K'; }
-        } else b[0] = b[1] = b[2] = b[3] = ' ';
-        b[4] = 0;
+            b[0] = 'Z';
+            if (H->cd[4]) num(divs(H->cd[4] + 59, 60), 2, b + 1); else { b[1] = 'O'; b[2] = 'K'; }
+        } else b[0] = b[1] = b[2] = ' ';
+        b[3] = 0;
         textW(15, 27, b);
         static const u8 sx[6] = { 33, 35, 37, 33, 35, 37 }, sy[6] = { 24, 24, 24, 26, 26, 26 };
         for (k = 0; k < NITEM; k++)         /* what the hero owns fills the slots from the left */
@@ -2539,9 +2537,17 @@ static void hud_part1(u8 part)
         for (; n < 6; n++) wicon(sx[n], sy[n], ATTR(2, 1, T_SLOT0));
         return;
     }
-    if (!split) {                       /* the top panel: team kills and a big clock */
+    if (!split) {                       /* the top panel: a big clock over the gold tug of war, team kills */
         u8 kills[2] = { 0, 0 };
-        for (k = 0; k < nh; k++) kills[k & 1] += hr[k].kills;
+        u16 nw[2] = { 1, 1 };
+        s16 fill;
+        for (k = 0; k < nh; k++) { kills[k & 1] += hr[k].kills; nw[k & 1] += hr[k].earned >> 4; }
+        fill = divs((s32)nw[0] * 80, nw[0] + nw[1]);            /* Radiant's share of 10 cells */
+        VDP_CTRL32 = VRAM_W(PLANE_A + 256 + 15 * 2);
+        for (k = 0; k < 10; k++) {
+            s16 f = fill - (k << 3);
+            VDP_DATA = ATTR(1, 1, T_TUG + (f < 0 ? 0 : (f > 8 ? 8 : f)));
+        }
         clock_text(b);
         for (k = 0; k < 5; k++) {
             u8 d = b[k] == ':' ? 10 : b[k] - '0';
@@ -2551,8 +2557,8 @@ static void hud_part1(u8 part)
             VDP_DATA = ATTR(1, 1, T_BIGD + (d << 1) + 1);
         }
         afont = T_FONTW;
-        num(kills[0], 2, b); textA(13, 1, b);
-        num(kills[1], 2, b); textA(25, 1, b);
+        num(kills[0], 2, b); textA(15, 0, b);
+        num(kills[1], 2, b); textA(24, 0, b);
         afont = T_FONT;
     }
 }
@@ -2574,10 +2580,16 @@ static void hud_art(u8 h, u16 tski, u16 tport)
     src = hero_art;
     for (k = hk[h]; k; k--) src += 81 * 8;
     VDP_CTRL32 = VRAM_W(tport << 5);
-    for (k = 72; k; k--) {
+    for (k = 0; k < 72; k++) {          /* 9 tiles column-major: on an orange field in a white frame */
         u32 v = *src++, o = 0;
-        u8 n;
-        for (n = 0; n < 8; n++, v <<= 4) o = (o << 4) | ((v >> 28) ? (v >> 28) : 13);
+        u8 n, t = k >> 3, r = k & 7, tx = t >= 6 ? 2 : (t >= 3 ? 1 : 0), ty = t - times(3, tx);
+        u8 edge_y = (ty == 0 && r == 0) || (ty == 2 && r == 7);
+        for (n = 0; n < 8; n++, v <<= 4) {
+            u8 c = v >> 28;
+            if (edge_y || (tx == 0 && n == 0) || (tx == 2 && n == 7)) c = 5;
+            else if (!c) c = 15;
+            o = (o << 4) | c;
+        }
         VDP_DATA32 = o;
     }
 }
@@ -2595,11 +2607,9 @@ static void hud_static(void)
     hud_art(view, T_SKI, T_PORT);
     for (y = 0; y < 3; y++)
         for (x = 0; x < 3; x++) wtile(5 + x, 24 + y, ATTR(un[view].team + 2, 1, T_PORT + times(3, x) + y));
-    for (y = 0; y < 3; y++) wtile(9, 24 + y, ATTR(1, 1, T_HICON + y));
+    for (y = 0; y < 3; y++) wtile(11, 24 + y, ATTR(1, 1, T_HICON + y));
     for (y = HUD_Y; y < 28; y++) { wtile(19, y, ATTR(1, 1, T_FRAME + 1)); wtile(31, y, ATTR(1, 1, T_FRAME + 1)); }
-    panelA(10, 30, 0, 1);
-    textA(10, 0, "RADIANT");
-    textA(24, 0, "DIRE");
+    panelA(14, 26, 0, 2);
     afont = T_FONT;
 }
 
