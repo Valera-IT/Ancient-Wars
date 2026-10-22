@@ -1170,12 +1170,15 @@ for by in range(0, N, 2):
                 cells[y][x] = TREE if (n >= 2 and free) else (GRASS if cells[y][x] == TREE and n < 2 else cells[y][x])
 
 seal_pockets()
-
-
-def tree_block(cx, cy):
-    """the whole 2x2 block of (cx, cy) is forest: draw a big tree there, else a bush in the cell"""
-    bx, by = cx & ~1, cy & ~1
-    return all(cell(bx + dx, by + dy) == TREE for dy in (0, 1) for dx in (0, 1))
+# no lone forest cells: a forest cell outside a whole 2x2 tree block becomes grass, unless that opens a pocket
+for _ in range(4):
+    for y in range(N):
+        for x in range(N):
+            if cells[y][x] == TREE and not all(cells[(y & ~1) + dy][(x & ~1) + dx] == TREE for dy in (0, 1) for dx in (0, 1)):
+                cells[y][x] = GRASS
+    seal_pockets()
+print("lone forest cells left:", sum(cells[y][x] == TREE and not all(cells[(y & ~1) + dy][(x & ~1) + dx] == TREE
+      for dy in (0, 1) for dx in (0, 1)) for y in range(N) for x in range(N)))
 
 
 def cell(x, y):
@@ -1257,55 +1260,47 @@ def field(layer, px, py):
             ind(i, j + 1) * (1 - fu) * fv + ind(i + 1, j + 1) * fu * fv)
 
 
-def tree_stamp(size, s, v):
-    """a single tree, size 32 (on a block) or 16 (a bush): a cauliflower crown of leaf clumps with
-    a black rim, each clump lit from the top left, a brown trunk and a hatched shadow to the
-    bottom right. Radiant trees are green, Dire ones darker. -1 = shade the ground."""
-    im = [[0] * size for _ in range(size)]
-    k = size / 32.0
-    for y in range(size):
-        for x in range(size):
-            dx, dy = (x + 0.5 - (size / 2 + 4 * k)) / (12 * k), (y + 0.5 - (size - 4 * k)) / (4 * k)
-            if dx * dx + dy * dy <= 1 and (x + y) % 2 == 0:
+def tree_stamp(s):
+    """a single 32x32 tree on a 2x2-cell block, after the Dota pixel-art look: a wide
+    round crown brighter than the grass with a black rim, lumpy lime highlights on top, a dark
+    underside, a short thick trunk and a diagonally hatched shadow to the bottom left. Dire trees
+    are darker. -1 = shade the ground."""
+    im = [[0] * 32 for _ in range(32)]
+    for y in range(32):
+        for x in range(32):
+            dx, dy = (x + 0.5 - 13) / 13, (y + 0.5 - 27) / 4.5
+            if dx * dx + dy * dy <= 1 and (x - y) % 3 != 0:
                 im[y][x] = -1
-    if size == 32:
-        bark, bark_lit = (15, 7) if s else (8, 9)
-        for y in range(20, 30):
-            w = 2 if y < 27 else 3                          # flared root
-            for x in range(16 - w, 16 + w):
-                edge = x in (16 - w, 16 + w - 1) or y == 29
-                im[y][x] = 1 if edge else (bark_lit if x == 16 - w + 1 else bark)
-        lobes = [(16, 8, 7.5), (8.5, 12.5, 7), (23.5, 12.5, 7), (16, 14, 8.5),
-                 (10.5, 17.5, 6), (21.5, 17.5, 6), (16, 18.5, 5.5)]
-    else:
-        lobes = [(8, 5.5, 4.5), (4.5, 8.5, 4.2), (11.5, 8.5, 4.2), (8, 10, 4.5)]
-    dark, mid, lit, hi = (5, 5, 2, 3) if s else (2, 3, 4, 6)
-    for y in range(size):
-        for x in range(size):
-            inside = [(cy, cx, r) for cx, cy, r in lobes if math.hypot(x + 0.5 - cx, y + 0.5 - cy) <= r]
-            if not inside:
+    for y in range(19, 28):
+        w = 3 if y < 25 else 4                              # flared root
+        for x in range(16 - w, 16 + w):
+            edge = x in (16 - w, 16 + w - 1) or y == 27
+            im[y][x] = 1 if edge else (9 if x == 16 - w + 1 and not s else (5 if s and x > 16 else 8))
+    ccx, ccy, rx, ry = 16, 11.5, 14.5, 10.5
+    lumps = [(9.5, 6.5, 4.5), (17, 4.5, 4.5), (23.5, 8, 4), (13, 11.5, 4), (20, 11.5, 3.5), (6, 12, 3.2)]
+    dark, body, top, lit = (14, 5, 2, 3) if s else (5, 3, 4, 6)
+    for y in range(32):
+        for x in range(32):
+            dx, dy = (x + 0.5 - ccx) / rx, (y + 0.5 - ccy) / ry
+            d = dx * dx + dy * dy
+            if d > 1:
                 continue
-            cy, cx, r = max(inside)                         # lower clumps are in front
-            dx, dy = (x + 0.5 - cx) / r, (y + 0.5 - cy) / r
-            d = math.hypot(dx, dy)
-            # rim: a neighbour pixel outside every clump
-            rim = any(all(math.hypot(x + 0.5 + ox - lx, y + 0.5 + oy - ly) > lr for lx, ly, lr in lobes)
-                      for ox, oy in ((1, 0), (-1, 0), (0, 1), (0, -1)))
-            if rim:
-                im[y][x] = 1
+            if d > 0.83 or (dy > 0 and d > 0.78):
+                im[y][x] = 1                                # black rim, thicker below
                 continue
-            if d > 0.82 and dy < 0.3:
-                im[y][x] = 5                                # seam over the clump behind
+            if dy > 0.42 - 0.15 * dx:
+                im[y][x] = dark                             # shaded underside
                 continue
-            light = -0.55 * dx - 0.75 * dy
-            c = hi if light > 0.45 else (lit if light > 0.0 else (mid if light > -0.45 else dark))
-            if c == lit and (x * 5 + y * 3) % 13 == 0:
-                c = hi                                      # leaf glints
+            c = top if dy < -0.15 else body
+            for lx, ly, r in lumps:                         # later lumps lie in front
+                ux, uy = (x + 0.5 - lx) / r, (y + 0.5 - ly) / r
+                if ux * ux + uy * uy <= 1:
+                    c = dark if uy > 0.6 and abs(ux) < 0.7 else (lit if ux + 1.3 * uy < -0.55 else top)
             im[y][x] = c
     return im
 
 
-TREES = {(sz, s): tree_stamp(sz, s, 0) for sz in (32, 16) for s in (0, 1)}
+TREES = [tree_stamp(s) for s in (0, 1)]
 
 
 def pixel(px, py, s, var):
@@ -1313,13 +1308,9 @@ def pixel(px, py, s, var):
     lx, ly = px % 16, py % 16
     cx, cy = px >> 4, py >> 4
     if cell(cx, cy) == TREE:
-        if tree_block(cx, cy):
-            bs = side(cx & ~1, cy & ~1)
-            g = (TEX_ASH if bs else TEX_GRASS)[0][ly][lx]
-            t = TREES[(32, bs)][py % 32][px % 32]
-        else:
-            g = (TEX_ASH if s else TEX_GRASS)[0][ly][lx]
-            t = TREES[(16, s)][ly][lx]
+        bs = side(cx & ~1, cy & ~1)
+        g = (TEX_ASH if bs else TEX_GRASS)[0][ly][lx]
+        t = TREES[bs][py % 32][px % 32]
         return DARKEN.get(g, g) if t == -1 else (t or g)
     c = (TEX_ASH if s else TEX_GRASS)[var % 2][ly][lx]
     fr = field(ROAD, px, py)
