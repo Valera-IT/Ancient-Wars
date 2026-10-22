@@ -391,75 +391,65 @@ def flesh(b, cx, cy, r, rx=None, ry=None):
                     b[y][x] = 5
 
 
-PUDGE_FRONT = [
+PUDGE_FRONT = [                    # traced from the reference: one squat hunched mass, the wide
+    "                        ",       # flat head sunk on top, arms spread, the hook held out up-right
     "                        ",
+    "                       5",
+    "      ##########     #4#",
+    "     #SSSSSSSSSS#    #3 ",
+    "    #SSS#SSSS##SS#   3  ",
+    "   #sSSSSSsddsSSSs# 3   ",
+    "  #s##SSSSSSSSSSs#####  ",
+    " #SS#sSSSSSSSSSSSs#SSs# ",
+    " #S#S#SSSSSdSSSSSSSSSs# ",
+    "#SSSs#SSSSSdSSSSSs#sss# ",
+    "#S#S#sSSSSSdsSSSSs####  ",
+    "#ss#ssSSSSsdssSSs#      ",
+    " ###sssSSSsdsssSss#     ",
+    "    #ssssssdsssss#      ",
+    "    ##dddddddddd##      ",
+    "     #BBBBbbBBBBb#      ",
+    "     #BBbBBBBbBBb#      ",
+    "     #bBBb#bBBbb#       ",
+    "      #bb# #bbb#        ",
+    "   1 1 ### 1###1 1      ",
+    "    1 1 1 1 1 1 1 1     ",
+    "     1 1 1 1 1 1 1      ",
     "                        ",
-    "   ####   ####   ####   ",
-    "  #SSSS# #SSSS# #SSSs#  ",
-    " #SwSSSS#SwSSSs#SSSSSs# ",
-    " #SSSSSS#SdSSds#SSSSSs# ",
-    " #SSSSSSs#SddS#sSSSSSs# ",
-    " #SSSSSSSs#ss#sSSSSSss# ",
-    " #SSSsdSSSSSSSSSSdsSss# ",
-    " #SSs#SdSSwSSSSSdS#sss# ",
-    " #SSs#SSddSSSSddSS#sss# ",
-    " #Ss#SSSSSSSdSSSSSS#ss# ",
-    " #Ss#SSSSSSdSdSSSSS#ss# ",
-    " #ss#SSSSSSSdSSSSSs#ss# ",
-    " #ss#ssSSSSSdSSSSss#ss# ",
-    " #ss#sssSSSSSSSSsss#ss# ",
-    " #sd#dssssssssssssd#sd# ",
-    "  ##3#ddddddTTdddd#4444#",
-    "   #3#BBBBBBBBBBBB#4555#",
-    "  #3##BBBbBBBBbBBB##444#",
-    " #434#bBBb#BB#bBBb#  ## ",
-    "  #4# #bbb#  #bbb#      ",
-    "   #  1 1 1 1 1 1 1     ",
-    "       1 1 1 1 1 1      ",
 ]
-PUDGE_LEGS = [" #434#BBBb#  #bBBb#  ## ", "  #4# #bb#    #bbb#     "]   # the other step
-PUDGE_THROW = {                    # the hook arm flung up to the right, as in the reference
-    0: "                   #3#  ",
-    1: "                  #343# ",
-    2: "   ####   ####   ##4#   ",
-    3: "  #SSSS# #SSSS# #Ss#    ",
-    4: " #SwSSSS#SwSSSs#SSs#    ",
-    5: " #SSSSSS#SddSds#SSSs#   ",
-    8: " #SSSsdSSSSSSSSSSdsSs#  ",
-    9: " #SSs#SdSSwSSSSSdSSss#  ",
-    10: " #SSs#SSddSSSSddSSSs#   ",
-    11: " #Ss#SSSSSSSdSSSSSSs#   ",
-    12: " #Ss#SSSSSSdSdSSSSSs#   ",
-    13: " #ss#SSSSSSSdSSSSSs#    ",
-    14: " #ss#ssSSSSSdSSSSss#    ",
-    15: " #ss#sssSSSSSSSSsss#    ",
-    16: " #sd#dssssssssssssd#    ",
-    17: "  ##3#ddddddTTdddd#     ",
-    18: "   #3#BBBBBBBBBBBB#     ",
-    19: "  #3##BBBbBBBBbBBB#     ",
-    20: " #434#bBBb#BB#bBBb#     ",
+PUDGE_LEGS = ["     #BBbBBBBbBBb#      ", "     #bBBbb#bBBb#       ", "      #bbb# #bb#        ",
+              "   1 1 ### 1###1 1      "]
+PUDGE_THROW = {                    # the attack: the hook arm flung straight up, chain taut
+    0: "                   #4#  ",
+    1: "                   #3#  ",
+    2: "                   #3#  ",
+    3: "      ##########  #Ss#  ",
+    4: "     #SSSSSSSSSS##SSs#  ",
+    5: "    #SSS#SSSS##SS#Ss#   ",
+    6: "   #sSSSSSsddsSSSSSs#   ",
+    7: "  #s##SSSSSSSSSSsSSs#   ",
+    8: " #SS#sSSSSSSSSSSSss#    ",
+    9: " #S#S#SSSSSdSSSSSss#    ",
+    10: "#SSSs#SSSSSdSSSSSs#     ",
+    11: "#S#S#sSSSSSdsSSSSs#     ",
 }
-PUDGE_COLS = {"#": 1, "1": 1, "S": 6, "s": 7, "w": 5, "d": 13, "r": 12, "B": 8, "b": 13,
-              "3": 3, "4": 4, "5": 5, "T": 9}
+PUDGE_COLS = {"#": 1, "1": 1, "S": 6, "s": 7, "d": 13, "B": 8, "b": 13, "3": 3, "4": 4, "5": 5}
 
 
 def pudge_frame(d, f):
-    """The Butcher, after the Dota pixel-art reference: a huge pale gut, hunched boulder
-    shoulders with the small head sunk between them, blue trousers, a cleaver in one fist and
-    the chained hook in the other; the attack frame flings the hook arm up. The back view has no
-    face or chest lines; the side view shares the front art (the game mirrors it)."""
+    """The Butcher, traced from the Dota pixel-art reference: a squat pale gut with the wide flat
+    head sunk on top, arms spread, blue trousers, the chained hook held out up-right; the attack
+    frame flings the hook arm straight up. The back view has no face or belly line; the side
+    view shares the front art (the game mirrors it)."""
     rows = list(PUDGE_FRONT)
     if f == 1:
-        rows[20:22] = PUDGE_LEGS
+        rows[17:21] = PUDGE_LEGS
     elif f == 2:
         for y, r in PUDGE_THROW.items():
             rows[y] = r
     if d == 1:                                                      # from behind
-        rows = [r[:6] + r[6:18].replace("d", "S").replace("r", "s").replace("w", "S") + r[18:] if 3 <= y <= 15 else r
-                for y, r in enumerate(rows)]
-        rows[7] = rows[7][:9] + "SSSSSS" + rows[7][15:]
-        rows[6] = rows[6][:9] + "SSSSS" + rows[6][14:]
-        rows[5] = rows[5][:8] + "#SSSSSs" + rows[5][15:]
+        rows = [r[:6] + r[6:17].replace("d", "s") + r[17:] if 5 <= y <= 14 else r for y, r in enumerate(rows)]
+        rows[5] = rows[5][:5] + "SSSSSSSSSSSS" + rows[5][17:]
     b = bmp(24, 24)
     for y, r in enumerate(rows):
         for x, ch in enumerate(r):
