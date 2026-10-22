@@ -1934,20 +1934,8 @@ static u8 enemy_hero(u8 i)
 
 static u8 choose_lane1(u8 i);
 
-/* 2v2, 3v3: the later bots of a side take lanes their teammates are not on (unless defending) */
-static u8 choose_lane(u8 i)
-{
-    u8 l = choose_lane1(i), a, occ = 0, k, team = un[i].team;
-    if (i < 2 || un[FIRST_BLD + team * 7 + l * 2].tgt >= FIRST_CREEP) return l;
-    for (a = team; a < i; a += 2)
-        if (un[a].on) occ |= 1 << nearest_lane(PX(un[a].x), PX(un[a].y));
-    if (!(occ & (1 << l))) return l;
-    for (k = 0; k < 3; k++) {
-        static const u8 pref[2][3] = { { 1, 2, 0 }, { 1, 0, 2 } };   /* mid, then the safe lane */
-        if (!(occ & (1 << pref[team][k]))) return pref[team][k];
-    }
-    return l;
-}
+/* 2v2, 3v3: the whole side holds mid together, leaving only to defend */
+static u8 choose_lane(u8 i) { return choose_lane1(i); }
 
 static u8 choose_lane1(u8 i)
 {
@@ -1963,11 +1951,13 @@ static u8 choose_lane1(u8 i)
         u8 m = tlist[team ^ 1][k];
         if (m >= FIRST_CREEP && dist(cpx[m] - PX(A->x), cpy[m] - PX(A->y)) < 160) return un[m].lane;
     }
-    if (un[e].on && dist(PX(un[e].x) - fountain_x[e & 1], PX(un[e].y) - fountain_y[e & 1]) > 240) {
+    if (nh == 2 && un[e].on && dist(PX(un[e].x) - fountain_x[e & 1], PX(un[e].y) - fountain_y[e & 1]) > 240) {
+        /* 1v1: meet the enemy hero on its lane (in team games the bots hold mid instead) */
         l = nearest_lane(PX(un[e].x), PX(un[e].y));
         if (hr[i].lvl + 1 < hr[e].lvl) return l == 1 ? (team ? 0 : 2) : 2 - l;
         return l;
     }
+    if (nh > 2) return 1;
     for (k = 0; k < 3; k++) {                   /* mid wins unless a side tower is much weaker */
         static const u8 order[3] = { 1, 0, 2 };
         u8 b;
