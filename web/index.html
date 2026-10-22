@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ANCIENT WARS</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #05030f; color: #cfe; font-family: monospace; }
+  #wrap { width: 960px; max-width: 100%; aspect-ratio: 4 / 3; margin: 16px auto 8px; }
+  p { text-align: center; margin: 4px 16px; }
+</style>
+</head>
+<body>
+<div id="wrap"><div id="game"></div></div>
+<p>ANCIENT WARS — Sega Mega Drive / Genesis ROM</p>
+<script>
+  EJS_player = "#game";
+  EJS_core = "segaMD";
+  EJS_gameUrl = "../build/ancient_wars.bin?v=" + Date.now();
+  EJS_pathtodata = "https://cdn.emulatorjs.org/stable/data/";
+  EJS_startOnLoaded = true;
+  EJS_gameName = "ancient_wars";   // stable key so SRAM saves survive reloads
+  // EmulatorJS's own save storage does not survive reloads here, so mirror the SRAM to localStorage
+  const SAVE_KEY = "ancient_wars.srm";
+  EJS_onGameStart = () => {
+    const gm = EJS_emulator.gameManager;
+    try {
+      const b64 = localStorage.getItem(SAVE_KEY);
+      if (b64) {
+        const data = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+        gm.FS.writeFile(gm.getSaveFilePath(), data);
+        gm.loadSaveFiles();
+      }
+    } catch (e) { console.warn("save restore failed", e); }
+    setInterval(() => {
+      try {
+        gm.saveSaveFiles();
+        const f = gm.getSaveFile();
+        if (f && f.length) localStorage.setItem(SAVE_KEY, btoa(String.fromCharCode.apply(null, f.subarray(0, 64))));
+      } catch (e) {}
+    }, 3000);
+  };
+</script>
+<script src="https://cdn.emulatorjs.org/stable/data/loader.js"></script>
+</body>
+</html>
