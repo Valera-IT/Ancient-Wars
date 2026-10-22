@@ -266,7 +266,7 @@ PAL_MAP = [(0, 0, 0), (0, 0, 0), (0, 3, 1), (1, 4, 1), (2, 5, 1), (0, 2, 1), (3,
 PAL_UI = [(0, 0, 0), (0, 0, 0), (7, 7, 7), (5, 7, 7), (3, 6, 7), (2, 4, 7), (7, 7, 2), (7, 4, 0),
           (7, 1, 1), (1, 6, 1), (0, 3, 0), (2, 4, 7), (0, 1, 3), (0, 0, 0), (7, 6, 1), (3, 3, 4)]   # 13: the black HUD
 UNIT_COMMON = {0: (0, 0, 0), 1: (0, 0, 0), 2: (2, 2, 2), 3: (4, 4, 4), 4: (6, 6, 6), 5: (7, 7, 7),
-               6: (7, 5, 4), 7: (3, 5, 2), 8: (3, 5, 7), 12: (7, 1, 0), 13: (2, 0, 2), 14: (4, 1, 4),
+               6: (7, 6, 5), 7: (6, 4, 3), 8: (3, 5, 7), 12: (7, 1, 0), 13: (2, 0, 2), 14: (4, 1, 4),
                15: (7, 6, 2)}
 PAL_RAD = [UNIT_COMMON.get(i) or {9: (0, 3, 1), 10: (1, 5, 2), 11: (4, 7, 3)}[i] for i in range(16)]
 PAL_DIRE = [UNIT_COMMON.get(i) or {9: (3, 0, 0), 10: (6, 1, 0), 11: (7, 4, 2)}[i] for i in range(16)]
@@ -391,74 +391,81 @@ def flesh(b, cx, cy, r, rx=None, ry=None):
                     b[y][x] = 5
 
 
+PUDGE_FRONT = [
+    "                        ",
+    "                        ",
+    "   ####   ####   ####   ",
+    "  #SSSS# #SSSS# #SSSs#  ",
+    " #SwSSSS#SwSSSs#SSSSSs# ",
+    " #SSSSSS#SdSSds#SSSSSs# ",
+    " #SSSSSSs#SddS#sSSSSSs# ",
+    " #SSSSSSSs#ss#sSSSSSss# ",
+    " #SSSsdSSSSSSSSSSdsSss# ",
+    " #SSs#SdSSwSSSSSdS#sss# ",
+    " #SSs#SSddSSSSddSS#sss# ",
+    " #Ss#SSSSSSSdSSSSSS#ss# ",
+    " #Ss#SSSSSSdSdSSSSS#ss# ",
+    " #ss#SSSSSSSdSSSSSs#ss# ",
+    " #ss#ssSSSSSdSSSSss#ss# ",
+    " #ss#sssSSSSSSSSsss#ss# ",
+    " #sd#dssssssssssssd#sd# ",
+    "  ##3#ddddddTTdddd#4444#",
+    "   #3#BBBBBBBBBBBB#4555#",
+    "  #3##BBBbBBBBbBBB##444#",
+    " #434#bBBb#BB#bBBb#  ## ",
+    "  #4# #bbb#  #bbb#      ",
+    "   #  1 1 1 1 1 1 1     ",
+    "       1 1 1 1 1 1      ",
+]
+PUDGE_LEGS = [" #434#BBBb#  #bBBb#  ## ", "  #4# #bb#    #bbb#     "]   # the other step
+PUDGE_THROW = {                    # the hook arm flung up to the right, as in the reference
+    0: "                   #3#  ",
+    1: "                  #343# ",
+    2: "   ####   ####   ##4#   ",
+    3: "  #SSSS# #SSSS# #Ss#    ",
+    4: " #SwSSSS#SwSSSs#SSs#    ",
+    5: " #SSSSSS#SddSds#SSSs#   ",
+    8: " #SSSsdSSSSSSSSSSdsSs#  ",
+    9: " #SSs#SdSSwSSSSSdSSss#  ",
+    10: " #SSs#SSddSSSSddSSSs#   ",
+    11: " #Ss#SSSSSSSdSSSSSSs#   ",
+    12: " #Ss#SSSSSSdSdSSSSSs#   ",
+    13: " #ss#SSSSSSSdSSSSSs#    ",
+    14: " #ss#ssSSSSSdSSSSss#    ",
+    15: " #ss#sssSSSSSSSSsss#    ",
+    16: " #sd#dssssssssssssd#    ",
+    17: "  ##3#ddddddTTdddd#     ",
+    18: "   #3#BBBBBBBBBBBB#     ",
+    19: "  #3##BBBbBBBBbBBB#     ",
+    20: " #434#bBBb#BB#bBBb#     ",
+}
+PUDGE_COLS = {"#": 1, "1": 1, "S": 6, "s": 7, "w": 5, "d": 13, "r": 12, "B": 8, "b": 13,
+              "3": 3, "4": 4, "5": 5, "T": 9}
+
+
 def pudge_frame(d, f):
-    """The Butcher: a huge pale-pink gut, boulder shoulders, a small bald head sunk between
-    them, blue trousers; a cleaver in one fist and the hook on its chain in the other."""
+    """The Butcher, after the Dota pixel-art reference: a huge pale gut, hunched boulder
+    shoulders with the small head sunk between them, blue trousers, a cleaver in one fist and
+    the chained hook in the other; the attack frame flings the hook arm up. The back view has no
+    face or chest lines; the side view shares the front art (the game mirrors it)."""
+    rows = list(PUDGE_FRONT)
+    if f == 1:
+        rows[20:22] = PUDGE_LEGS
+    elif f == 2:
+        for y, r in PUDGE_THROW.items():
+            rows[y] = r
+    if d == 1:                                                      # from behind
+        rows = [r[:6] + r[6:18].replace("d", "S").replace("r", "s").replace("w", "S") + r[18:] if 3 <= y <= 15 else r
+                for y, r in enumerate(rows)]
+        rows[7] = rows[7][:9] + "SSSSSS" + rows[7][15:]
+        rows[6] = rows[6][:9] + "SSSSS" + rows[6][14:]
+        rows[5] = rows[5][:8] + "#SSSSSs" + rows[5][15:]
     b = bmp(24, 24)
-    shadow(b, 12, 21, 10, 3)
-    legs(b, d, f, 12, 18, 8, 1)
-    sx = 2 if d == 2 else 0
-    flesh(b, 12 + sx, 13, 8, rx=8.5, ry=6.5)          # the gut
-    rect(b, 5 + sx, 17, 19 + sx, 18, 8)                             # trousers
-    rect(b, 5 + sx, 16, 19 + sx, 16, 13)                            # belt
-    put(b, 12 + sx, 16, 15)
-    sw = 0 if f == 2 else f
-    if d != 2:
-        flesh(b, 5, 9.5, 4.2)                          # boulder shoulders, up by the ears
-        flesh(b, 19, 9.5, 4.2)
-        rect(b, 2, 12, 4, 16 + sw, 6)                               # arms hang to the knees
-        rect(b, 20, 12, 22, 16 - sw + 1, 6)
-        rect(b, 2, 12, 2, 16 + sw, 14)
-        rect(b, 22, 12, 22, 17 - sw, 14)
-    else:
-        flesh(b, 13, 10, 4.2)                          # the near shoulder
-        rect(b, 12, 12, 14, 17, 6)
-        rect(b, 12, 12, 12, 17, 14)
-    if d == 0:
-        bx = 12
-        line(b, bx, 11, bx, 16, 14)                                 # the stitched-up gut
-        for y in range(11, 16, 2):
-            put(b, bx - 1, y, 12)
-            put(b, bx + 1, y, 12)
-        put(b, 8, 12, 14); put(b, 16, 12, 14)                       # chest folds
-    elif d == 1:
-        line(b, 4, 8, 19, 16, 9)                                    # a team strap across the back
-        line(b, 5, 8, 20, 16, 9)
-    hb = 12 + (4 if d == 2 else 0)
-    hy = 6 if d != 1 else 5
-    ell(b, hb, hy, 4.0, 3.6, 1)                                     # bald head, sunk between them
-    ell(b, hb, hy, 3.4, 3.0, 14)
-    ell(b, hb - 0.3, hy - 0.4, 2.8, 2.4, 6)
-    put(b, hb - 1, hy - 2, 5)
-    if d == 0:
-        put(b, 11, hy, 1); put(b, 13, hy, 1)
-        line(b, 10, hy + 2, 14, hy + 2, 12)                         # a wide grin
-        put(b, 11, hy + 2, 5); put(b, 13, hy + 2, 5)
-    elif d == 2:
-        put(b, 18, hy, 1)
-        line(b, 17, hy + 2, 19, hy + 2, 12)
-    if f == 2:                                                      # the swing
-        if d == 0:
-            line(b, 19, 13, 20, 21, 6, 2)
-            rect(b, 18, 21, 22, 23, 4)
-            rect(b, 22, 21, 22, 23, 5)
-        elif d == 1:
-            line(b, 19, 10, 20, 3, 6, 2)
-            rect(b, 18, 0, 22, 3, 4)
-        else:
-            line(b, 15, 12, 21, 11, 6, 2)
-            rect(b, 21, 7, 23, 13, 4)
-            put(b, 23, 7, 5)
-    elif d != 2:
-        rect(b, 19, 17 - sw, 23, 21 - sw, 4)                        # cleaver
-        rect(b, 23, 17 - sw, 23, 21 - sw, 5)
-        for y in range(17 + sw, 21 + sw, 2):
-            put(b, 1, y, 3)                                         # chain
-        put(b, 1, 21 + sw, 4); put(b, 2, 22 + sw, 5); put(b, 3, 21 + sw, 4)   # the hook
-    else:
-        rect(b, 13, 17, 17, 21 - sw, 4)
-        rect(b, 17, 17, 17, 21 - sw, 5)
-    return add_outline(b)
+    for y, r in enumerate(rows):
+        for x, ch in enumerate(r):
+            if ch != " ":
+                b[y][x] = PUDGE_COLS[ch]
+    return b
 
 
 def axe_frame(d, f):
@@ -842,7 +849,7 @@ def chain_link():
 
 def rot_puff():
     b = bmp(8, 8)
-    disc(b, 3.5, 4, 2.6, 7)
+    disc(b, 3.5, 4, 2.6, 11)
     disc(b, 3, 3.5, 1.4, 3)
     return b
 
