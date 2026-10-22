@@ -260,12 +260,13 @@ BAYER = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]]
 
 
 # ---------------------------------------------------------------- palettes
-PAL_MAP = [(0, 0, 0), (0, 1, 0), (1, 3, 0), (2, 4, 1), (3, 5, 1), (0, 2, 1), (0, 3, 2), (1, 5, 2),
-           (3, 2, 1), (4, 3, 2), (6, 5, 3), (0, 1, 4), (1, 3, 6), (4, 6, 7), (3, 3, 3), (5, 5, 5)]
+# map: 2-4 grass, 5/2/6 tree crowns, 8-10 orange dirt, 11-13 river, 14/15/7 the Dire's dusk
+PAL_MAP = [(0, 0, 0), (0, 0, 0), (0, 3, 1), (1, 4, 1), (2, 5, 1), (0, 2, 1), (3, 6, 2), (3, 3, 6),
+           (5, 2, 0), (7, 4, 1), (7, 6, 3), (0, 1, 4), (1, 3, 7), (4, 6, 7), (0, 0, 1), (2, 2, 4)]
 PAL_UI = [(0, 0, 0), (0, 0, 0), (7, 7, 7), (5, 7, 7), (3, 6, 7), (2, 4, 7), (7, 7, 2), (7, 4, 0),
           (7, 1, 1), (1, 6, 1), (0, 3, 0), (2, 4, 7), (0, 1, 3), (1, 1, 2), (7, 6, 1), (3, 3, 4)]
 UNIT_COMMON = {0: (0, 0, 0), 1: (0, 0, 0), 2: (2, 2, 2), 3: (4, 4, 4), 4: (6, 6, 6), 5: (7, 7, 7),
-               6: (6, 4, 3), 7: (3, 5, 2), 8: (3, 5, 7), 12: (7, 1, 0), 13: (2, 0, 2), 14: (4, 1, 4),
+               6: (7, 5, 4), 7: (3, 5, 2), 8: (3, 5, 7), 12: (7, 1, 0), 13: (2, 0, 2), 14: (4, 1, 4),
                15: (7, 6, 2)}
 PAL_RAD = [UNIT_COMMON.get(i) or {9: (0, 3, 1), 10: (1, 5, 2), 11: (4, 7, 3)}[i] for i in range(16)]
 PAL_DIRE = [UNIT_COMMON.get(i) or {9: (3, 0, 0), 10: (6, 1, 0), 11: (7, 4, 2)}[i] for i in range(16)]
@@ -377,49 +378,86 @@ def sf_frame(d, f):
     return add_outline(b)
 
 
+def flesh(b, cx, cy, r, rx=None, ry=None):
+    """a pink ball: dark underside, one small white gleam up-left"""
+    rx, ry = rx or r, ry or r
+    for y in range(len(b)):
+        for x in range(len(b[0])):
+            dx, dy = (x + 0.5 - cx) / rx, (y + 0.5 - cy) / ry
+            d2 = dx * dx + dy * dy
+            if d2 <= 1.0:
+                b[y][x] = 14 if dy > 0.55 or dx * 0.6 + dy > 0.75 else 6
+                if (dx + 0.45) ** 2 + (dy + 0.5) ** 2 < 0.05:
+                    b[y][x] = 5
+
+
 def pudge_frame(d, f):
+    """The Butcher: a huge pale-pink gut, boulder shoulders, a small bald head sunk between
+    them, blue trousers; a cleaver in one fist and the hook on its chain in the other."""
     b = bmp(24, 24)
-    shadow(b, 12, 21, 9, 3)
-    legs(b, d, f, 12, 18, 2, 1)
-    shade_sphere(b, 12, 13, 8, [7, 7, 7], rx=8.5, ry=7.5)
-    if d != 1:
-        ell(b, 12 + (2 if d == 2 else 0), 15, 4, 3, 6)     # belly
-        for y in range(9, 20, 2):
-            put(b, 12 + (2 if d == 2 else 0), y, 12)        # stitches
+    shadow(b, 12, 21, 10, 3)
+    legs(b, d, f, 12, 18, 8, 1)
+    sx = 2 if d == 2 else 0
+    flesh(b, 12 + sx, 13, 8, rx=8.5, ry=6.5)          # the gut
+    rect(b, 5 + sx, 17, 19 + sx, 18, 8)                             # trousers
+    rect(b, 5 + sx, 16, 19 + sx, 16, 13)                            # belt
+    put(b, 12 + sx, 16, 15)
+    sw = 0 if f == 2 else f
+    if d != 2:
+        flesh(b, 5, 9.5, 4.2)                          # boulder shoulders, up by the ears
+        flesh(b, 19, 9.5, 4.2)
+        rect(b, 2, 12, 4, 16 + sw, 6)                               # arms hang to the knees
+        rect(b, 20, 12, 22, 16 - sw + 1, 6)
+        rect(b, 2, 12, 2, 16 + sw, 14)
+        rect(b, 22, 12, 22, 17 - sw, 14)
     else:
-        for y in range(8, 19, 3):
-            line(b, 9, y, 15, y + 1, 9)                     # straps
-    rect(b, 5, 10, 18, 11, 9)
-    put(b, 6, 10, 11)
-    ell(b, 12 + (3 if d == 2 else 0), 5, 3.3, 3, 7)
+        flesh(b, 13, 10, 4.2)                          # the near shoulder
+        rect(b, 12, 12, 14, 17, 6)
+        rect(b, 12, 12, 12, 17, 14)
     if d == 0:
-        put(b, 11, 5, 1)
-        put(b, 13, 5, 1)
-        line(b, 11, 7, 13, 7, 1)
+        bx = 12
+        line(b, bx, 11, bx, 16, 14)                                 # the stitched-up gut
+        for y in range(11, 16, 2):
+            put(b, bx - 1, y, 12)
+            put(b, bx + 1, y, 12)
+        put(b, 8, 12, 14); put(b, 16, 12, 14)                       # chest folds
+    elif d == 1:
+        line(b, 4, 8, 19, 16, 9)                                    # a team strap across the back
+        line(b, 5, 8, 20, 16, 9)
+    hb = 12 + (4 if d == 2 else 0)
+    hy = 6 if d != 1 else 5
+    ell(b, hb, hy, 4.0, 3.6, 1)                                     # bald head, sunk between them
+    ell(b, hb, hy, 3.4, 3.0, 14)
+    ell(b, hb - 0.3, hy - 0.4, 2.8, 2.4, 6)
+    put(b, hb - 1, hy - 2, 5)
+    if d == 0:
+        put(b, 11, hy, 1); put(b, 13, hy, 1)
+        line(b, 10, hy + 2, 14, hy + 2, 12)                         # a wide grin
+        put(b, 11, hy + 2, 5); put(b, 13, hy + 2, 5)
     elif d == 2:
-        put(b, 16, 5, 1)
-    hx = 20
-    if f == 2:
+        put(b, 18, hy, 1)
+        line(b, 17, hy + 2, 19, hy + 2, 12)
+    if f == 2:                                                      # the swing
         if d == 0:
-            line(b, 17, 14, 19, 21, 7, 2)
-            rect(b, 17, 21, 21, 23, 3)
+            line(b, 19, 13, 20, 21, 6, 2)
+            rect(b, 18, 21, 22, 23, 4)
+            rect(b, 22, 21, 22, 23, 5)
         elif d == 1:
-            line(b, 17, 11, 19, 3, 7, 2)
-            rect(b, 17, 0, 21, 3, 3)
+            line(b, 19, 10, 20, 3, 6, 2)
+            rect(b, 18, 0, 22, 3, 4)
         else:
-            line(b, 17, 12, 22, 11, 7, 2)
-            rect(b, 21, 7, 23, 13, 3)
-            put(b, 23, 7, 4)
+            line(b, 15, 12, 21, 11, 6, 2)
+            rect(b, 21, 7, 23, 13, 4)
+            put(b, 23, 7, 5)
+    elif d != 2:
+        rect(b, 19, 17 - sw, 23, 21 - sw, 4)                        # cleaver
+        rect(b, 23, 17 - sw, 23, 21 - sw, 5)
+        for y in range(17 + sw, 21 + sw, 2):
+            put(b, 1, y, 3)                                         # chain
+        put(b, 1, 21 + sw, 4); put(b, 2, 22 + sw, 5); put(b, 3, 21 + sw, 4)   # the hook
     else:
-        sw = f
-        line(b, 4, 12, 3, 17 + sw, 7, 2)
-        line(b, 19, 12, hx, 16 - sw, 7, 2)
-        # cleaver and hook
-        rect(b, 19, 16 - sw, 22, 20 - sw, 3)
-        rect(b, 22, 16 - sw, 22, 20 - sw, 4)
-        line(b, 2, 18 + sw, 2, 21 + sw, 3)
-        put(b, 3, 22 + sw, 4)
-        put(b, 4, 21 + sw, 4)
+        rect(b, 13, 17, 17, 21 - sw, 4)
+        rect(b, 17, 17, 17, 21 - sw, 5)
     return add_outline(b)
 
 
@@ -1075,8 +1113,10 @@ for y in range(N):
             c = WATER
         if in_base and 2 <= x < N - 2 and 2 <= y < N - 2:
             c = BASE
-        if ld < 1.6 and not in_base:
+        if ld < 2.1 and not in_base:
             c = ROAD
+        if rd < 1.6:
+            c = WATER                       # the river cuts the mid road: units wade across
         cells[y][x] = c
 # river ends in small ponds
 for cx, cy in RIVER:
@@ -1126,9 +1166,9 @@ def periodic_tex(seed, base, flecks, n, blades):
     return t
 
 
-TEX_GRASS = [periodic_tex(1, 3, [2, 2, 4], 30, True), periodic_tex(2, 3, [2, 4, 4], 26, True)]
-TEX_ASH = [periodic_tex(3, 8, [1, 9, 9], 22, False), periodic_tex(4, 8, [9, 1], 18, False)]
-TEX_DIRT = [periodic_tex(5, 9, [8, 10], 20, False)]
+TEX_GRASS = [periodic_tex(1, 3, [2, 4, 4], 22, True), periodic_tex(2, 3, [4, 2, 4], 18, True)]
+TEX_ASH = [periodic_tex(3, 14, [15, 15, 1], 20, False), periodic_tex(4, 14, [15, 1], 16, False)]
+TEX_DIRT = [periodic_tex(5, 9, [10, 10, 8], 18, False)]
 TEX_WATER = [[12] * 16 for _ in range(16)]
 for y in range(16):
     for x in range(16):
@@ -1145,7 +1185,7 @@ def cobble(x, y):
         bx = (x + 4) % 8
     if bx == 0 or by == 0:
         return 1
-    return 15 if bx == 1 or by == 1 else 14
+    return 7 if bx == 1 or by == 1 else 15
 
 
 def slab(x, y, hi, lo, line_c):
@@ -1157,9 +1197,9 @@ def slab(x, y, hi, lo, line_c):
     return lo if (bx + by) % 11 else hi
 
 
-DARKEN = {2: 1, 3: 2, 4: 3, 8: 1, 9: 8, 10: 9, 14: 1, 15: 14, 12: 11, 13: 12, 11: 1}
+DARKEN = {2: 5, 3: 2, 4: 2, 6: 2, 8: 1, 9: 8, 10: 9, 14: 1, 15: 14, 7: 14, 12: 11, 13: 12, 11: 1}
 
-LUMPS = [(4, 4, 5.2), (12, 3, 4.6), (3, 12, 4.8), (11, 11, 5.4), (8, 8, 4.0)]
+LUMPS = [(4, 4, 6.4), (12, 12, 6.4)]
 
 
 def lump(x, y):
@@ -1203,33 +1243,39 @@ def pixel(px, py, s, var):
     fr = field(ROAD, px, py)
     fw = field(WATER, px, py)
     fb = field(BASE, px, py)
+    if fr >= 0.5:
+        c = cobble(px, py) if s else TEX_DIRT[0][ly][lx]
+        if fr < 0.56:
+            c = 1 if s else 8                               # road edge
+        elif fr < 0.62 and not s:
+            c = 10                                          # sunlit rim
+    elif fr >= 0.42 and not s and fw < 0.5:
+        c = 2                                               # darker grass along the road
     if fw >= 0.5:
         c = TEX_WATER[ly][lx]
         if fw < 0.62:
             c = 13 if (lx + ly) % 3 else 12                # foam rim
         elif field(WATER, px - 3, py - 3) < 0.5:
             c = 11                                          # bank shadow
-    if fr >= 0.5:
-        c = cobble(px, py) if s else TEX_DIRT[0][ly][lx]
-        if fr < 0.58:
-            c = 1 if s else 8                               # road edge
+    elif s and field(WATER, px - 7, py + 11) >= 0.5:
+        c = 1 if px % 4 == 0 else 14                        # the Dire bank: a dark cliff face
     if fb >= 0.5:
-        c = slab(px, py, 15, 15, 14) if not s else slab(px, py, 14, 14, 1)
+        c = slab(px, py, 10, 10, 9) if not s else slab(px, py, 15, 15, 14)
         if fb < 0.58:
-            c = 14 if not s else 1
+            c = 8 if not s else 1
         elif field(BASE, px - 2, py - 2) < 0.5:
-            c = 14 if not s else 8
+            c = 8 if not s else 14
     if tree:
         d, dx, dy = fl
         edge = ft + 0.35 * (bump - 0.45) < 0.58
-        if d > 1.0 or edge:
-            c = 1 if (edge or s) else 5
+        if d > 0.8 or edge:
+            c = 1                                           # black gaps between round crowns
         else:
             light = -0.6 * dx - 0.7 * dy + 0.4 * math.sqrt(max(0.0, 1 - d))
             if s:
-                c = 6 if light > 0.45 else (5 if light > -0.2 else 1)
+                c = 7 if light > 0.85 else (15 if light > 0.2 else 14)
             else:
-                c = 7 if light > 0.35 else (6 if light > -0.25 else 5)
+                c = 6 if light > 0.7 else (2 if light > 0.0 else 5)
     return c
 
 
@@ -1258,11 +1304,11 @@ def stamp_fountain(img, x0, y0):
             if d >= 23:
                 continue
             if d > 19:
-                c = 15 if (x + y) % 5 else 14
+                c = 10 if (x + y) % 5 else 9
             elif d > 17:
-                c = 14
+                c = 8
             elif d < 5:
-                c = 15 if d < 3.5 else 14
+                c = 10 if d < 3.5 else 9
             elif d < 6:
                 c = 13
             else:
@@ -1277,15 +1323,15 @@ def minimap():
             ks = [cells[y * 2 + dy][x * 2 + dx] for dy in (0, 1) for dx in (0, 1)]
             s = side(x * 2, y * 2)
             if ROAD in ks:
-                c = 15 if s else 10
+                c = 7 if s else 9
             elif WATER in ks:
                 c = 12
             elif BASE in ks:
-                c = 14 if s else 15
+                c = 7 if s else 10
             elif ks.count(TREE) >= 2:
-                c = 5 if s else 6
+                c = 14 if s else 5
             else:
-                c = 8 if s else 3
+                c = 15 if s else 3
             b[y][x] = c
     return b
 
@@ -1436,6 +1482,7 @@ for fx, fy in (FOUNTAIN_RAD, rot(FOUNTAIN_RAD)):
                 dedupe[t] = len(tiles)
             map_ground[((y0 >> 3) + ty) * 128 + (x0 >> 3) + tx] = dedupe[t]
 assert len(tiles) < 1280, len(tiles)
+assert len(tiles) + 1 + 9 * 18 <= 1280, ("draft hero frames overflow into plane A", len(tiles))
 
 walk = [0 if cells[y][x] == TREE else 1 for y in range(N) for x in range(N)]
 

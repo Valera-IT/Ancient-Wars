@@ -78,7 +78,8 @@ static void vdp_init(void)
 #define T_PORT (T_SKI + 16)          /* and its portrait, 3x3 */
 #define T_SKI2 (T_PORT + 9)          /* split screen: the same for the second player */
 #define T_PORT2 (T_SKI2 + 16)
-#define T_DICON (T_HSLOT + 27 * NHERO)   /* draft: the skills of the hero under the cursor */
+#define T_DICON 1984                 /* draft: the skills of the hero under the cursor (0xF800, past the hscroll table) */
+#define T_DHERO(k) ((k) < NHERO - 1 ? T_HSLOT + times(18, k) : T_DICON + 16)   /* draft: stand and attack poses; the last hero's fit up there */
 static void hero_tiles(u8 kind, u8 first, u8 n, u16 dst)
 {
     const u32 *src = hero_art + (first << 3);
@@ -3138,7 +3139,10 @@ static u8 draft(void)
     if (game == 1) ns = 2;
     for (y = 0; y < 24; y++) clearA(y);
     for (y = HUD_Y; y < 28; y++) clearW(y);
-    for (k = 0; k < NHERO; k++) hero_tiles(k, 0, 27, T_HSLOT + times(27, k));   /* facing-down frames */
+    for (k = 0; k < NHERO; k++) {          /* facing down: standing and attacking */
+        hero_tiles(k, 0, 9, T_DHERO(k));
+        hero_tiles(k, 18, 9, T_DHERO(k) + 9);
+    }
     pal_set(1, pal_ui);
     panelA(1, 39, 12, 23);
     textW(2, 25, "D-PAD: HERO   A: PICK   B: BACK");
@@ -3146,7 +3150,7 @@ static u8 draft(void)
     fade(1);
     for (;;) {
         u16 n;
-        u8 f, pad = game == 1 && at == 1;              /* player 2 drafts the enemy */
+        u8 pad = game == 1 && at == 1;              /* player 2 drafts the enemy */
         if (shown != (cur | (at << 4))) {
             char b[40];
             const char *m;
@@ -3212,7 +3216,6 @@ static u8 draft(void)
         }
         t++;
         nspr = 0;
-        f = (t >> 4) & 1;
         for (k = 0; k < NHERO; k++) {
             s16 gx = 36 + times(56, k < 5 ? k : k - 5), gy = k < 5 ? 28 : 64;
             u8 pal = 2, m, tx = 0;
@@ -3223,7 +3226,7 @@ static u8 draft(void)
                     pal = 2 + (save[SV_SIDE] ^ (m & 1));
                 }
             if (k == cur) pal = 2 + (save[SV_SIDE] ^ (at & 1));
-            spr(gx, gy, 0x0A, ATTR(pal, 0, T_HSLOT + times(27, k) + (k == cur && (t & 32) ? 2 : f) * 9));
+            spr(gx, gy, 0x0A, ATTR(pal, 0, T_DHERO(k) + (k == cur && (t & 32) ? 9 : 0)));
             for (m = 0; m < tx; m++)
                 spr(gx + 12 - (tx << 2) + (m << 3), gy + 25, 0, ATTR(1, 1, T_FONT + (tag[m] - 32)));
             if (k == cur && (t & 16)) {
