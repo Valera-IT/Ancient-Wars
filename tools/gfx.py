@@ -262,7 +262,7 @@ BAYER = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]]
 # ---------------------------------------------------------------- palettes
 # map: 2-4 grass, 5/2/6 tree crowns, 8-10 orange dirt, 11-13 river, 14/15/7 the Dire's dusk
 PAL_MAP = [(0, 0, 0), (0, 0, 0), (0, 3, 1), (1, 4, 1), (2, 5, 1), (0, 2, 1), (3, 6, 2), (3, 3, 6),
-           (5, 2, 0), (7, 4, 1), (7, 6, 3), (0, 1, 4), (1, 3, 7), (4, 6, 7), (0, 0, 1), (2, 2, 4)]
+           (4, 2, 1), (7, 4, 1), (7, 6, 3), (0, 1, 4), (1, 3, 7), (4, 6, 7), (0, 0, 1), (2, 2, 4)]
 PAL_UI = [(0, 0, 0), (0, 0, 0), (7, 7, 7), (5, 7, 7), (3, 6, 7), (2, 4, 7), (7, 7, 2), (7, 4, 0),
           (7, 1, 1), (1, 6, 1), (0, 3, 0), (2, 4, 7), (0, 1, 3), (0, 0, 0), (7, 6, 1), (3, 3, 4)]   # 13: the black HUD
 UNIT_COMMON = {0: (0, 0, 0), 1: (0, 0, 0), 2: (2, 2, 2), 3: (4, 4, 4), 4: (6, 6, 6), 5: (7, 7, 7),
@@ -1260,43 +1260,56 @@ def field(layer, px, py):
             ind(i, j + 1) * (1 - fu) * fv + ind(i + 1, j + 1) * fu * fv)
 
 
+TREE_ART = [
+"      ############      ",
+"     #mmmmmmmmmmmm#     ",
+"   ##mmmmmLmmLmmmmm##   ",
+"  #.mmmLmLLLLLLmmmmmm#  ",
+" #mmmmLmLLLLLLLLLLmmm.# ",
+"#mmmmLmLLLLLLLLLLLmmm.m#",
+"#.mmmmLLLLLLLLLLLmmmm.k#",
+"#mmmmmLLLLLLLLLLLmmmm#m#",
+"#kmmLmLLLLLLLLLLLmmm.kk#",
+"#mmLmmLLLLLLLLLLLmmmmm.#",
+"#.mmmmmLLLLLLLLmmmmmm.k#",
+"#m#m#mLmmLLmmmLLmmmm#m.#",
+"#..mmmmmmmmLLmmmmmm...k#",
+"#m#m#mmmmmLmmmmLmmmm#.#.",
+" #m#.#mmmm.mmm.#k#.#k#  ",
+"  #m#m#mmmmmmmkk#.##k   ",
+"    #.#.#m#m.#kk#.#.    ",
+"     #####.##.####.     ",
+"      mm#######km       ",
+"      #m#b####kkk       ",
+"     #m###bbbb##k#      ",
+"    #m##bbbbbbbb#.#     ",
+"     #L#bbbbbbbbk#.     ",
+"    #m#m##bbbb#k#k#     ",
+"     #m#m##bb#kk.#.     ",
+"    #.#.#m###kkk#.#     ",
+"       #.#.##k#kk.      ",
+"        # # .#kk        ",
+]
+
+
 def tree_stamp(s):
-    """a single 32x32 tree on a 2x2-cell block, after the Dota pixel-art look: a wide
-    round crown brighter than the grass with a black rim, lumpy lime highlights on top, a dark
-    underside, a short thick trunk and a diagonally hatched shadow to the bottom left. Dire trees
-    are darker. -1 = shade the ground."""
+    """a single 32x32 tree on a 2x2-cell block, copied pixel for pixel from the Dota pixel-art
+    reference: a round crown with a light centre and a dithered dark rim, a red-brown trunk in a
+    dithered cast shadow. Rows from 17 down are trunk and shadow on the ground: their greens are
+    the ground itself (0) or the ground darkened (-1), so the shadow works on both sides."""
+    crown = {'#': 1, 'k': 14, '.': 5, 'm': 5, 'L': 2, 'b': 8} if s else {'#': 1, 'k': 5, '.': 2, 'm': 3, 'L': 4, 'b': 8}
     im = [[0] * 32 for _ in range(32)]
-    for y in range(32):
-        for x in range(32):
-            dx, dy = (x + 0.5 - 13) / 13, (y + 0.5 - 27) / 4.5
-            if dx * dx + dy * dy <= 1 and (x - y) % 3 != 0:
-                im[y][x] = -1
-    for y in range(19, 28):
-        w = 3 if y < 25 else 4                              # flared root
-        for x in range(16 - w, 16 + w):
-            edge = x in (16 - w, 16 + w - 1) or y == 27
-            im[y][x] = 1 if edge else (9 if x == 16 - w + 1 and not s else (5 if s and x > 16 else 8))
-    ccx, ccy, rx, ry = 16, 11.5, 14.5, 10.5
-    lumps = [(9.5, 6.5, 4.5), (17, 4.5, 4.5), (23.5, 8, 4), (13, 11.5, 4), (20, 11.5, 3.5), (6, 12, 3.2)]
-    dark, body, top, lit = (14, 5, 2, 3) if s else (5, 3, 4, 6)
-    for y in range(32):
-        for x in range(32):
-            dx, dy = (x + 0.5 - ccx) / rx, (y + 0.5 - ccy) / ry
-            d = dx * dx + dy * dy
-            if d > 1:
+    for y, row in enumerate(TREE_ART):
+        for x, ch in enumerate(row):
+            if ch == ' ':
                 continue
-            if d > 0.83 or (dy > 0 and d > 0.78):
-                im[y][x] = 1                                # black rim, thicker below
-                continue
-            if dy > 0.42 - 0.15 * dx:
-                im[y][x] = dark                             # shaded underside
-                continue
-            c = top if dy < -0.15 else body
-            for lx, ly, r in lumps:                         # later lumps lie in front
-                ux, uy = (x + 0.5 - lx) / r, (y + 0.5 - ly) / r
-                if ux * ux + uy * uy <= 1:
-                    c = dark if uy > 0.6 and abs(ux) < 0.7 else (lit if ux + 1.3 * uy < -0.55 else top)
-            im[y][x] = c
+            if y >= 17 and ch in 'mL':
+                c = 0
+            elif y >= 17 and ch in 'k.':
+                c = -1
+            else:
+                c = crown[ch]
+            im[y + 2][x + 4] = c
     return im
 
 
