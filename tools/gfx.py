@@ -1405,9 +1405,6 @@ for lv in range(1, 9):
 define("T_MPBAR", add_sprite(ui_bar(0, 11, 12)))
 for lv in range(1, 9):
     add_sprite(ui_bar(lv, 11, 12))
-define("T_TUG", add_sprite(ui_bar(0, 9, 8, False)))   # top: Radiant's share of the gold, green against red
-for lv in range(1, 9):
-    add_sprite(ui_bar(lv, 9, 8, False))
 define("T_MARK", add_sprite(marker(0)))
 add_sprite(marker(1))
 add_sprite(marker(2))

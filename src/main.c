@@ -2537,17 +2537,9 @@ static void hud_part1(u8 part)
         for (; n < 6; n++) wicon(sx[n], sy[n], ATTR(2, 1, T_SLOT0));
         return;
     }
-    if (!split) {                       /* the top panel: a big clock over the gold tug of war, team kills */
+    if (!split) {                       /* the top panel: a big clock between the team kills */
         u8 kills[2] = { 0, 0 };
-        u16 nw[2] = { 1, 1 };
-        s16 fill;
-        for (k = 0; k < nh; k++) { kills[k & 1] += hr[k].kills; nw[k & 1] += hr[k].earned >> 4; }
-        fill = divs((s32)nw[0] * 80, nw[0] + nw[1]);            /* Radiant's share of 10 cells */
-        VDP_CTRL32 = VRAM_W(PLANE_A + 256 + 15 * 2);
-        for (k = 0; k < 10; k++) {
-            s16 f = fill - (k << 3);
-            VDP_DATA = ATTR(1, 1, T_TUG + (f < 0 ? 0 : (f > 8 ? 8 : f)));
-        }
+        for (k = 0; k < nh; k++) kills[k & 1] += hr[k].kills;
         clock_text(b);
         for (k = 0; k < 5; k++) {
             u8 d = b[k] == ':' ? 10 : b[k] - '0';
@@ -2609,7 +2601,7 @@ static void hud_static(void)
         for (x = 0; x < 3; x++) wtile(5 + x, 24 + y, ATTR(un[view].team + 2, 1, T_PORT + times(3, x) + y));
     for (y = 0; y < 3; y++) wtile(11, 24 + y, ATTR(1, 1, T_HICON + y));
     for (y = HUD_Y; y < 28; y++) { wtile(19, y, ATTR(1, 1, T_FRAME + 1)); wtile(31, y, ATTR(1, 1, T_FRAME + 1)); }
-    panelA(14, 26, 0, 2);
+    panelA(14, 26, 0, 1);
     afont = T_FONT;
 }
 
