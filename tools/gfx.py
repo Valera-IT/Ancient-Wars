@@ -929,6 +929,8 @@ GLYPHS = {
              "..abbbbaa...", "..abbbbbba..", ".aabbbbbbba.", ".accccccccca", ".aaaaaaaaaaa", "............"],
     "lock": ["....aaaa....", "...a....a...", "...a....a...", "...a....a...", "..aaaaaaaa..", "..abbbbbba..",
              "..abbccbba..", "..abbccbba..", "..abbbcbba..", "..abbbbbba..", "..aaaaaaaa..", "............"],
+    "bracer": ["............", "............", "..aaaaaaaa..", ".abbbbbbbba.", ".abccbbccba.", ".abbbddbbba.",
+               ".abbbddbbba.", ".abccbbccba.", ".abbbbbbbba.", "..aaaaaaaa..", "............", "............"],
     "none": ["............"] * 12,
 }
 
@@ -963,7 +965,8 @@ SKILL_ICONS = [
     [("spike", 3, 4, 6, 5, 2), ("frog", 7, 7, 1), ("drop", 8, 8, 5), ("hand", 14, 12, 5, 5, 1)],          # Lion
     [("spiral", 15, 5, 5, 5, 2), ("plus", 7, 7), ("swords", 4, 5, 15), ("blade", 8, 5, 15, 6, 1)],        # Jugg
 ]
-ITEM_ICONS = [("boot", 1, 6, 15, 5, 2), ("blade", 3, 5, 15, 6, 2), ("heart", 13, 7, 5, 5, 2), ("blade", 8, 5, 15, 6, 13)]
+ITEM_ICONS = [("boot", 1, 6, 15, 5, 2), ("blade", 3, 5, 15, 6, 2), ("heart", 13, 7, 5, 5, 2), ("blade", 8, 5, 15, 6, 13),
+              ("bracer", 1, 6, 15, 12, 2)]
 
 
 def small_icon(kind):
@@ -975,6 +978,7 @@ def small_icon(kind):
             "boot": [".77.....", ".77.....", ".77.....", ".777....", ".77777..", ".777777.", ".222222.", "........"],
             "sword": [".....22.", "....2f2.", "...2f2..", "2.2f2...", ".2f2....", "..77....", ".7.7....", "........"],
             "vital": ["..888...", "..888...", "8888888.", "8888888.", "8888888.", "..888...", "..888...", "........"],
+            "bracer": ["........", ".777777.", "7e7ee7e7", "7eee8ee7", "7eee8ee7", "7e7ee7e7", ".777777.", "........"],
             "blink": [".....bb.", "....b3b.", "...b3b..", "e.b3b...", ".eeb....", "..ee....", ".e..e...", "........"]}
     b = bmp(8, 8, 13)
     for y, row in enumerate(pats[kind]):
@@ -1361,7 +1365,7 @@ define("T_HICON", add_sprite(small_icon("heart")))   # heart, drop, star
 add_sprite(small_icon("drop"))
 add_sprite(small_icon("star"))
 define("T_MINIIT", add_sprite(small_icon("boot")))   # one 8x8 mark per item, split-screen HUD
-for k in ("sword", "vital", "blink"):
+for k in ("sword", "vital", "blink", "bracer"):
     add_sprite(small_icon(k))
 define("T_PIPS", add_sprite(pip_tile(0, 0)))          # 3 * a + b
 for a in range(3):

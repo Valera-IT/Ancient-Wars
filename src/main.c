@@ -399,7 +399,8 @@ static u8 walkable(s16 x, s16 y)
 enum { U_HERO, U_MELEE, U_RANGED, U_TOWER, U_ANCIENT };
 enum { PJ_SF, PJ_CREEP, PJ_TOWER, PJ_BULLET, PJ_ICE, PJ_FIRE, PJ_DARK, PJ_REQ, PJ_LFIRE, PJ_LROCK };  /* REQ on: lines */
 enum { FX_RAZE, FX_SPARK, FX_POOF, FX_DENY, FX_GOLD, FX_RING, FX_HELIX, FX_DMG, FX_FIRE, FX_ICE, FX_BOLT };
-enum { IT_BOOTS = 1, IT_BLADES = 2, IT_VIT = 4, IT_BLINK = 8 };
+enum { IT_BOOTS = 1, IT_BLADES = 2, IT_VIT = 4, IT_BLINK = 8, IT_BRACER = 16 };
+#define NITEM 5
 #define F_HERO 1
 #define F_CREEP 2
 #define F_BLD 4
@@ -474,7 +475,8 @@ static const s16 fountain_y[2] = { 960, 64 };
 static const s8 slot_dx[4] = { -9, 9, 0, 0 };
 static const s8 slot_dy[4] = { 0, 0, -9, 9 };
 static const u16 raze_dist[3] = { 24, 56, 88 };
-static const u16 item_price[4] = { 500, 450, 1000, 2250 };
+static const u16 item_price[NITEM] = { 500, 450, 1000, 2250, 400 };
+static const u8 bot_buy[NITEM] = { 4, 0, 1, 2, 3 };    /* bots start with a Bracer */
 
 /* lane waypoints (lane_top/mid/bot in gfx.h) from the Radiant Ancient to the Dire Ancient */
 static const s16 *const lane_pts[3] = { lane_top, lane_mid, lane_bot };
@@ -763,6 +765,7 @@ static s16 calc_hpmax(u8 i)
     s16 v = st_hp[hk[i]] + times(st_hpl[hk[i]], H->lvl);
     if (hk[i] == K_PUDGE) v += times(20, H->heap);
     if (H->items & IT_VIT) v += 200;
+    if (H->items & IT_BRACER) v += 80;
     return v;
 }
 
@@ -775,6 +778,7 @@ static s16 atk_dmg(u8 i)
     if (hk[i] == K_SF) d += H->souls << 1;
     if (hk[i] == K_DROW) d += (H->sk[0] << 1) + (H->sk[3] << 3);      /* Frost Arrows, Marksmanship */
     if (H->items & IT_BLADES) d += 10;
+    if (H->items & IT_BRACER) d += 3;
     return d;
 }
 
@@ -1901,14 +1905,16 @@ static void lane_walk(Cmd *c, u8 i, u8 l, s16 want)
 static void bot_shop(u8 i)
 {
     Hero *H = &hr[i];
-    u8 k;
-    for (k = 0; k < 4; k++)
-        if (!(H->items & (1 << k)) && H->gold >= item_price[k]) {
+    u8 n, k;
+    for (n = 0; n < NITEM; n++) {
+        k = bot_buy[n];
+        if (!(H->items & (1 << k))) {           /* in order: save up for the next item */
+            if (H->gold < item_price[k]) return;
             H->gold -= item_price[k];
             H->items |= 1 << k;
             refresh_max(i);
-            return;
         }
+    }
 }
 
 /* where to fight: defend a tower under attack, else meet (or, when outlevelled, avoid) the
@@ -1961,12 +1967,14 @@ static u8 choose_lane1(u8 i)
         if (hr[i].lvl + 1 < hr[e].lvl) return l == 1 ? (team ? 0 : 2) : 2 - l;
         return l;
     }
-    for (k = 0; k < 3; k++) {                   /* ties (full health) go to mid */
+    for (k = 0; k < 3; k++) {                   /* mid wins unless a side tower is much weaker */
         static const u8 order[3] = { 1, 0, 2 };
         u8 b;
+        s16 v;
         l = order[k];
         b = outer_bld(team ^ 1, l);
-        if (!protected_bld(b) && un[b].hp < hp) { hp = un[b].hp; best = l; }
+        v = un[b].hp - (l == 1 ? 500 : 0);
+        if (!protected_bld(b) && v < hp) { hp = v; best = l; }
     }
     return best;
 }
@@ -2128,6 +2136,12 @@ static void bot_cmd(u8 i, Cmd *c)
         c->tgt = e;
         return;
     }
+    /* go shopping (before farming on) when an item is affordable and the enemy hero is far */
+    for (k = 0; k < NITEM; k++)
+        if (!(H->items & (1 << bot_buy[k]))) {
+            if (H->gold >= item_price[bot_buy[k]] && ed > 160) { H->ai_st = 1; return; }
+            break;
+        }
     /* push when the enemy hero is away */
     if (!E->on || ed > 220) {
         t = nearest(i, 110, F_CREEP | F_BLD);
@@ -2136,12 +2150,6 @@ static void bot_cmd(u8 i, Cmd *c)
             return;
         }
     }
-    /* go shopping when an item is affordable and the enemy hero is far */
-    for (k = 0; k < 4; k++)
-        if (!(H->items & (1 << k))) {
-            if (H->gold >= item_price[k] && ed > 160) { H->ai_st = 1; return; }
-            break;
-        }
     /* stand a little behind our creep wave */
     front = creep_front(U->team, l);
     own = bld_lane_s(outer_bld(U->team, l), l);
@@ -2328,11 +2336,13 @@ static void pad_to(char *b, u8 j, u8 n) { while (j < n) b[j++] = ' '; b[n] = 0; 
 
 static void split_menu(u8 xo, u8 k)
 {
-    static const char *const items[4] = { "BOOTS       ", "BLADES      ", "VITALITY    ", "BLINK DAGGER" };
+    static const char *const items[NITEM] = { "BOOTS       ", "BLADES      ", "VITALITY    ", "BLINK DAGGER", "BRACER      " };
     Hero *H = &hr[me];
-    const char *n = shop_open ? items[k] : skill_name[hk[me]][k];
+    const char *n;
     char b[24];
     u8 j = 0, m;
+    if (shop_open && shop_sel > 3) k++;         /* four rows: scroll to the fifth item */
+    n = shop_open ? items[k] : skill_name[hk[me]][k];
     b[j++] = shop_sel == k ? '>' : ' ';
     for (m = 0; m < 12; m++) b[j++] = *n++;
     b[j++] = ' ';
@@ -2421,8 +2431,9 @@ static void split_hud(u8 part, u8 only)
         } else if (part == 2) {         /* XP, items, gold, Blink Dagger, skill points */
             u16 need = 140 + times(60, H->lvl);
             bar_tiles(xo + 3, 26, 5, H->lvl >= 16 ? 1 : H->xp, H->lvl >= 16 ? 1 : need, T_XPBAR);
-            for (x = 0; x < 4; x++)
-                wtile(xo + 8 + x, 26, H->items & (1 << x) ? ATTR(1, 1, T_MINIIT + x) : ATTR(1, 1, T_FONTW));
+            for (x = y = 0; x < NITEM; x++)    /* marks of the first four items owned */
+                if ((H->items & (1 << x)) && y < 4) wtile(xo + 8 + y++, 26, ATTR(1, 1, T_MINIIT + x));
+            for (; y < 4; y++) wtile(xo + 8 + y, 26, ATTR(1, 1, T_FONTW));
             b[0] = '$';
             num(H->gold > 9999 ? 9999 : H->gold, 4, b + 1);
             textW(xo + 3, 27, b);
@@ -2522,7 +2533,7 @@ static void hud_part1(u8 part)
         b[4] = 0;
         textW(15, 27, b);
         static const u8 sx[6] = { 33, 35, 37, 33, 35, 37 }, sy[6] = { 24, 24, 24, 26, 26, 26 };
-        for (k = 0; k < 4; k++)             /* what the hero owns fills the slots from the left */
+        for (k = 0; k < NITEM; k++)         /* what the hero owns fills the slots from the left */
             if (H->items & (1 << k)) { wicon(sx[n], sy[n], ATTR(2, 1, T_ITEMS + (k << 2))); n++; }
         for (; n < 6; n++) wicon(sx[n], sy[n], ATTR(2, 1, T_SLOT0));
         return;
@@ -2626,13 +2637,14 @@ static void scoreboard(u8 show)
 static void shop_draw(void)
 {
     if (split) { hud_dirty = 1; return; }
-    static const char *const names[4] = { "BOOTS OF SPEED  ", "BLADES OF ATTACK", "VITALITY BOOSTER", "BLINK DAGGER    " };
+    static const char *const names[NITEM] = { "BOOTS OF SPEED  ", "BLADES OF ATTACK", "VITALITY BOOSTER", "BLINK DAGGER    ",
+                                              "BRACER          " };
     Hero *H = &hr[me];
     u8 k;
     char b[8];
-    panelA(4, 36, 6, 13);
+    panelA(4, 36, 6, 14);
     textA_c(7, "- SHOP -  A:BUY  START:EXIT");
-    for (k = 0; k < 4; k++) {
+    for (k = 0; k < NITEM; k++) {
         textA(6, 9 + k, shop_sel == k ? ">" : " ");
         textA(8, 9 + k, names[k]);
         if (H->items & (1 << k)) textA(26, 9 + k, " OWNED");
@@ -3566,8 +3578,8 @@ static void match(u8 mode)
                 }
             }
             if (shop_open) {
-                if (H->pad_new & B_UP) shop_sel = (shop_sel + 3) & 3;
-                if (H->pad_new & B_DOWN) shop_sel = (shop_sel + 1) & 3;
+                if (H->pad_new & B_UP) shop_sel = shop_sel ? shop_sel - 1 : NITEM - 1;
+                if (H->pad_new & B_DOWN) shop_sel = shop_sel < NITEM - 1 ? shop_sel + 1 : 0;
                 if (H->pad_new & (B_A | B_B | B_C)) {
                     u8 bit = 1 << shop_sel;
                     if (!(H->items & bit) && H->gold >= item_price[shop_sel]) {
