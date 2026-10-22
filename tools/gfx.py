@@ -1099,6 +1099,7 @@ def rot(p):
 
 BUILDINGS = TOWERS_RAD + [ANCIENT_RAD] + [rot(p) for p in TOWERS_RAD] + [rot(ANCIENT_RAD)]
 
+clear = [[0] * N for _ in range(N)]     # cells that must stay open (lanes, river, bases, buildings)
 for y in range(N):
     for x in range(N):
         ld = lane_dist(x, y)
@@ -1110,8 +1111,16 @@ for y in range(N):
         for bx, by in BUILDINGS:
             if math.hypot(x + 0.5 - bx / 16, y + 0.5 - by / 16) < 3.5:
                 t = 0
+        if not t:
+            clear[y][x] = forest[y][x]
+            if ld < 2.8 or rd < 2.6 or in_base:
+                clear[y][x] = 1
+            for bx, by in BUILDINGS:
+                if math.hypot(x + 0.5 - bx / 16, y + 0.5 - by / 16) < 3.5:
+                    clear[y][x] = 1
         if x < 2 or y < 2 or x >= N - 2 or y >= N - 2:
             t = 1
+            clear[y][x] = 0
         c = TREE if t else GRASS
         if rd < 1.6:
             c = WATER
@@ -1150,7 +1159,23 @@ def seal_pockets():
                 cells[y][x] = TREE
 
 
+# forests are groups of single trees, each standing on a 2x2-cell block
+for by in range(0, N, 2):
+    for bx in range(0, N, 2):
+        blk = [(bx + dx, by + dy) for dy in (0, 1) for dx in (0, 1)]
+        n = sum(cells[y][x] == TREE for x, y in blk)
+        free = all(cells[y][x] in (TREE, GRASS) and not clear[y][x] for x, y in blk)
+        for x, y in blk:
+            if cells[y][x] in (TREE, GRASS):
+                cells[y][x] = TREE if (n >= 2 and free) else (GRASS if cells[y][x] == TREE and n < 2 else cells[y][x])
+
 seal_pockets()
+
+
+def tree_block(cx, cy):
+    """the whole 2x2 block of (cx, cy) is forest: draw a big tree there, else a bush in the cell"""
+    bx, by = cx & ~1, cy & ~1
+    return all(cell(bx + dx, by + dy) == TREE for dy in (0, 1) for dx in (0, 1))
 
 
 def cell(x, y):
@@ -1232,18 +1257,62 @@ def field(layer, px, py):
             ind(i, j + 1) * (1 - fu) * fv + ind(i + 1, j + 1) * fu * fv)
 
 
+def tree_stamp(size, s, v):
+    """a single tree, size 32 (on a block) or 16 (a bush): round crown with a black rim,
+    shading lit from the top left, a trunk and a shadow to the bottom right. -1 = shade the ground."""
+    im = [[0] * size for _ in range(size)]
+    k = size / 32.0
+    for y in range(size):
+        for x in range(size):
+            dx, dy = (x + 0.5 - (size / 2 + 3 * k)) / (13 * k), (y + 0.5 - (size - 3.5 * k)) / (3.5 * k)
+            if dx * dx + dy * dy <= 1:
+                im[y][x] = -1
+    if size == 32:
+        for y in range(22, 30):
+            for x in range(14, 18):
+                im[y][x] = 1 if x in (14, 17) or y == 29 else (14 if s else 8)
+    lobes = [(16, 13, 13.2)] if v == 0 else [(10.5, 15, 8.8), (21.5, 15, 8.8), (16, 9, 9.2)]
+    if size == 16:
+        lobes = [(8, 7.5, 6.8)]
+    dark, mid, lit, spot = (14, 15, 7, 7) if s else (5, 2, 6, 4)
+    for y in range(size):
+        for x in range(size):
+            best = None
+            for cx, cy, r in lobes:
+                d = math.hypot(x + 0.5 - cx, y + 0.5 - cy) / r
+                if d <= 1 and (best is None or d < best[0]):
+                    best = (d, (x + 0.5 - cx) / r, (y + 0.5 - cy) / r)
+            if best is None:
+                continue
+            d, dx, dy = best
+            if d > 0.86:
+                im[y][x] = 1
+                continue
+            light = -0.6 * dx - 0.7 * dy + 0.4 * math.sqrt(max(0.0, 1 - d * d))
+            c = lit if light > 0.55 else (mid if light > -0.05 else dark)
+            if c != dark and (x * 7 + y * 3) % 11 == 0:
+                c = spot                                    # leaves
+            im[y][x] = c
+    return im
+
+
+TREES = {(sz, s, v): tree_stamp(sz, s, v) for sz in (32, 16) for s in (0, 1) for v in (0, 1)}
+
+
 def pixel(px, py, s, var):
     """Colour of world pixel (px, py) in a cell on side s."""
     lx, ly = px % 16, py % 16
+    cx, cy = px >> 4, py >> 4
+    if cell(cx, cy) == TREE:
+        if tree_block(cx, cy):
+            bs = side(cx & ~1, cy & ~1)
+            g = (TEX_ASH if bs else TEX_GRASS)[0][ly][lx]
+            t = TREES[(32, bs, ((cx >> 1) * 5 + (cy >> 1) * 3) % 3 == 0)][py % 32][px % 32]
+        else:
+            g = (TEX_ASH if s else TEX_GRASS)[0][ly][lx]
+            t = TREES[(16, s, 0)][ly][lx]
+        return DARKEN.get(g, g) if t == -1 else (t or g)
     c = (TEX_ASH if s else TEX_GRASS)[var % 2][ly][lx]
-    ft = field(TREE, px, py)
-    fl = lump(px, py)
-    bump = max(0.0, 1.0 - fl[0])
-    tree = ft + 0.35 * (bump - 0.45) >= 0.5
-    if not tree:
-        # tree shadow falls to the bottom-right
-        if field(TREE, px - 3, py - 3) + 0.2 >= 0.5:
-            c = DARKEN.get(c, c)
     fr = field(ROAD, px, py)
     fw = field(WATER, px, py)
     fb = field(BASE, px, py)
@@ -1269,17 +1338,6 @@ def pixel(px, py, s, var):
             c = 8 if not s else 1
         elif field(BASE, px - 2, py - 2) < 0.5:
             c = 8 if not s else 14
-    if tree:
-        d, dx, dy = fl
-        edge = ft + 0.35 * (bump - 0.45) < 0.58
-        if d > 0.8 or edge:
-            c = 1                                           # black gaps between round crowns
-        else:
-            light = -0.6 * dx - 0.7 * dy + 0.4 * math.sqrt(max(0.0, 1 - d))
-            if s:
-                c = 7 if light > 0.85 else (15 if light > 0.2 else 14)
-            else:
-                c = 6 if light > 0.7 else (2 if light > 0.0 else 5)
     return c
 
 
@@ -1291,7 +1349,7 @@ def build_map():
             cx, cy = tx >> 1, ty >> 1
             s = side(cx, cy)
             var = (cx * 7 + cy * 3) % 5 == 0
-            key = (tx & 1, ty & 1, s, var, tuple(cell(cx + dx, cy + dy) for dy in (-1, 0, 1) for dx in (-1, 0, 1)))
+            key = (tx & 1, ty & 1, cx & 1, cy & 1, ((cx >> 1) * 5 + (cy >> 1) * 3) % 3 == 0, side(cx & ~1, cy & ~1), s, var, tuple(cell(cx + dx, cy + dy) for dy in (-1, 0, 1) for dx in (-1, 0, 1)))
             if key not in cache:
                 tb = [[pixel(tx * 8 + x, ty * 8 + y, s, var) for x in range(8)] for y in range(8)]
                 # store tile pixels relative to a cell-quadrant: textures are 16 px periodic, the
