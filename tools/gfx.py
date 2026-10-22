@@ -970,7 +970,12 @@ def small_icon(kind):
     """8x8 bar labels in the UI palette: heart, drop, star."""
     pats = {"heart": [".88.88..", "8888888.", "8888888.", ".88888..", "..888...", "...8....", "........", "........"],
             "drop": ["...b....", "...b....", "..bbb...", ".bbbbb..", ".bbbbb..", "..bbb...", "........", "........"],
-            "star": ["...6....", "..666...", "6666666.", ".66666..", ".66.66..", "6.....6.", "........", "........"]}
+            "star": ["...6....", "..666...", "6666666.", ".66666..", ".66.66..", "6.....6.", "........", "........"],
+            # split-screen item marks: boots, blades, vitality, blink dagger
+            "boot": [".77.....", ".77.....", ".77.....", ".777....", ".77777..", ".777777.", ".222222.", "........"],
+            "sword": [".....22.", "....2f2.", "...2f2..", "2.2f2...", ".2f2....", "..77....", ".7.7....", "........"],
+            "vital": ["..888...", "..888...", "8888888.", "8888888.", "8888888.", "..888...", "..888...", "........"],
+            "blink": [".....bb.", "....b3b.", "...b3b..", "e.b3b...", ".eeb....", "..ee....", ".e..e...", "........"]}
     b = bmp(8, 8, 13)
     for y, row in enumerate(pats[kind]):
         for x, ch in enumerate(row):
@@ -1355,6 +1360,9 @@ for lv in range(1, 9):
 define("T_HICON", add_sprite(small_icon("heart")))   # heart, drop, star
 add_sprite(small_icon("drop"))
 add_sprite(small_icon("star"))
+define("T_MINIIT", add_sprite(small_icon("boot")))   # one 8x8 mark per item, split-screen HUD
+for k in ("sword", "vital", "blink"):
+    add_sprite(small_icon(k))
 define("T_PIPS", add_sprite(pip_tile(0, 0)))          # 3 * a + b
 for a in range(3):
     for b in range(3):

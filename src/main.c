@@ -76,6 +76,8 @@ static void vdp_init(void)
 #define T_HSLOT (GFX_TILES + 1)
 #define T_SKI (T_HSLOT + 9 * NH)     /* the HUD hero's four ability icons, 2x2 tiles each */
 #define T_PORT (T_SKI + 16)          /* and its portrait, 3x3 */
+#define T_SKI2 (T_PORT + 9)          /* split screen: the same for the second player */
+#define T_PORT2 (T_SKI2 + 16)
 #define T_DICON (T_HSLOT + 27 * NHERO)   /* draft: the skills of the hero under the cursor */
 static void hero_tiles(u8 kind, u8 first, u8 n, u16 dst)
 {
@@ -2309,31 +2311,6 @@ static void bar_tiles(u8 x, u8 y, u8 cells, s16 v, s16 vmax, u16 base)
     }
 }
 
-static void skill_text(u8 k, char *s)
-{
-    static const char *const names[NHERO][4] = {
-        { "RAZ1", "RAZ2", "RAZ3", "REQM" }, { "HOOK", "ROT ", "HEAP", "DISM" }, { "CALL", "HUNG", "HELX", "CULL" },
-        { "SHRP", "HEAD", "AIM ", "ASSN" }, { "ARC ", "BOLT", "STAT", "WRTH" }, { "SLAV", "LSA ", "SOUL", "LAGN" },
-        { "NOVA", "BITE", "AURA", "FFLD" }, { "FROS", "GUST", "MULT", "MARK" }, { "SPIK", "HEX ", "DRAN", "FING" },
-        { "FURY", "WARD", "DNCE", "OMNI" } };
-    Hero *H = &hr[view];
-    u8 kind = hk[view], sk = kind == K_SF && k < 3 ? 0 : k;
-    const char *nm = k == 4 ? "BLNK" : names[kind][k];
-    u8 j;
-    s[0] = "BCXYZ"[k];
-    s[1] = ' ';
-    for (j = 0; j < 4; j++) s[2 + j] = nm[j];
-    s[6] = ' ';
-    if ((k < 4 && !H->sk[sk]) || (k == 4 && !(H->items & IT_BLINK))) { s[7] = '-'; s[8] = '-'; }
-    else if (k < 4 && passive(kind, k)) { s[7] = 'P'; s[8] = '0' + H->sk[k]; }
-    else if (kind == K_PUDGE && k == 1) { s[7] = 'O'; s[8] = H->rot ? 'N' : 'F'; }
-    else if (H->cd[k]) {
-        u16 sec = divs(H->cd[k] + 59, 60);
-        num(sec > 99 ? 99 : sec, 2, s + 7);
-    } else { s[7] = 'O'; s[8] = 'K'; }
-    s[9] = 0;
-}
-
 static const char *const skill_name[NHERO][4] = {
     { "SHADOWRAZE      ", "NECROMASTERY    ", "PRESENCE        ", "REQUIEM OF SOULS" },
     { "MEAT HOOK       ", "ROT             ", "FLESH HEAP      ", "DISMEMBER       " },
@@ -2406,46 +2383,56 @@ static void split_row23(void)
     textW((40 - j) >> 1, 23, b);
 }
 
-/* part 0-3 of the HUD; only = 0 or 1 draws just that hero's half, 2 draws both */
+static void wtile(u8 x, u8 y, u16 attr);
+static void wicon(u8 x, u8 y, u16 attr);
+static void abilities(u8 x0, u8 step, u16 tski);
+
+/* part 0-3 of the HUD; only = 0 or 1 draws just that hero's half, 2 draws both.
+   Each half is the full HUD cut down to 20 columns:
+     portrait | HP, mana, XP bars | HP, mana, item marks | four abilities
+     level    | gold              | Blink Dagger, +     | level pips      */
 static void split_hud(u8 part, u8 only)
 {
     u8 k, sv = view;
-    char b[24];
+    char b[8];
     if (part == 3 && only != 1) split_row23();
     for (k = 0; k < 2; k++) {
         if (only < 2 && k != only) continue;
         Hero *H = &hr[k];
         Unit *U = &un[k];
-        u8 xo = port_of[k] ? 20 : 0;
+        u8 xo = port_of[k] ? 20 : 0, x, y;
         if (k == me && (shop_open || learn_open)) { split_menu(xo, part); continue; }
         view = k;
-        if (part == 0) {
-            const char *n = hero_short[hk[k]];
-            u8 j = 0;
-            while (*n) b[j++] = *n++;
-            b[j++] = ' '; b[j++] = 'L';
-            num(H->lvl, 2, b + j); j += 2;
-            b[j++] = H->pts ? '+' : ' ';
-            b[j] = 0;
-            textW(xo, 24, b);
-            if (U->on) {
-                bar_tiles(xo + 10, 24, 5, U->hp, U->hpmax, T_HPBAR);
-                num(U->hp, 4, b);
-                textW(xo + 15, 24, b);
-            } else {
-                char r[12] = "RESPAWN ";
-                num(divs(H->respawn + 59, 60), 2, r + 8);
-                textW(xo + 10, 24, r);
-            }
-        } else if (part < 3) {
-            skill_text(part * 2 - 2, b); textW(xo, 24 + part, b);
-            skill_text(part * 2 - 1, b); textW(xo + 10, 24 + part, b);
-        } else {
-            skill_text(4, b); textW(xo, 27, b);
-            bar_tiles(xo + 10, 27, 4, H->mana, H->manamax, T_MPBAR);
+        if (part == 0) {                /* portrait, level, HP and mana */
+            u16 tp = k ? T_PORT2 : T_PORT;
+            for (y = 0; y < 3; y++)
+                for (x = 0; x < 3; x++) wtile(xo + x, 24 + y, ATTR(U->team + 2, 1, tp + times(3, x) + y));
+            if (U->on) { b[0] = 'L'; num(H->lvl, 2, b + 1); }
+            else { b[0] = 'R'; num(divs(H->respawn + 59, 60), 2, b + 1); }
+            textW(xo, 27, b);
+            bar_tiles(xo + 3, 24, 5, U->on ? U->hp : 0, U->hpmax, T_HPBAR);
+            num(U->on ? U->hp : 0, 4, b);
+            textW(xo + 8, 24, b);
+            bar_tiles(xo + 3, 25, 5, H->mana, H->manamax, T_MPBAR);
+            num(H->mana, 4, b);
+            textW(xo + 8, 25, b);
+        } else if (part == 1) {
+            abilities(xo + 12, 2, k ? T_SKI2 : T_SKI);
+        } else if (part == 2) {         /* XP, items, gold, Blink Dagger, skill points */
+            u16 need = 140 + times(60, H->lvl);
+            bar_tiles(xo + 3, 26, 5, H->lvl >= 16 ? 1 : H->xp, H->lvl >= 16 ? 1 : need, T_XPBAR);
+            for (x = 0; x < 4; x++)
+                wtile(xo + 8 + x, 26, H->items & (1 << x) ? ATTR(1, 1, T_MINIIT + x) : ATTR(1, 1, T_FONTW));
             b[0] = '$';
             num(H->gold > 9999 ? 9999 : H->gold, 4, b + 1);
-            textW(xo + 14, 27, b);
+            textW(xo + 3, 27, b);
+            if (H->items & IT_BLINK) {
+                b[0] = 'Z';
+                if (H->cd[4]) num(divs(H->cd[4] + 59, 60), 2, b + 1); else { b[1] = 'O'; b[2] = 'K'; }
+            } else b[0] = b[1] = b[2] = ' ';
+            b[3] = H->pts && (vcount & 32) ? '+' : ' ';
+            b[4] = 0;
+            textW(xo + 8, 27, b);
         }
         view = sv;
     }
@@ -2468,6 +2455,30 @@ static void wicon(u8 x, u8 y, u16 attr)
 {
     wtile(x, y, attr); wtile(x, y + 1, attr + 1);
     wtile(x + 1, y, attr + 2); wtile(x + 1, y + 1, attr + 3);
+}
+
+/* the view hero's abilities from column x0, step columns apart: icon, cooldown or key, level pips */
+static void abilities(u8 x0, u8 step, u16 tski)
+{
+    Hero *H = &hr[view];
+    u8 kind = hk[view], k, x = x0;
+    char b[4];
+    for (k = 0; k < 4; k++, x += step) {
+        u8 sk = kind == K_SF && k < 3 ? 0 : k, lv = H->sk[sk], mx = sk_max(sk), j, st[4];
+        wicon(x, 24, lv ? ATTR(2, 1, tski + (sk << 2)) : ATTR(2, 1, T_LOCK));
+        if (!lv) { b[0] = b[1] = ' '; }
+        else if (kind == K_PUDGE && k == 1) { b[0] = 'O'; b[1] = H->rot ? 'N' : 'F'; }
+        else if (passive(kind, k)) { b[0] = b[1] = ' '; }
+        else if (H->cd[k]) {
+            u16 sec = divs(H->cd[k] + 59, 60);
+            num(sec > 99 ? 99 : sec, 2, b);
+        } else { b[0] = "BCXY"[k]; b[1] = ' '; }
+        b[2] = 0;
+        textW(x, 26, b);
+        for (j = 0; j < 4; j++) st[j] = j < lv ? 2 : (j < mx ? 1 : 0);
+        wtile(x, 27, ATTR(1, 1, T_PIPS + times(3, st[0]) + st[1]));
+        wtile(x + 1, 27, ATTR(1, 1, T_PIPS + times(3, st[2]) + st[3]));
+    }
 }
 
 /* Dota-style HUD: minimap | portrait | HP, mana, XP bars | four abilities | items;
@@ -2498,26 +2509,7 @@ static void hud_part1(u8 part)
         textW(15, 26, b);
         return;
     }
-    if (part == 1) {                    /* abilities: icon, cooldown or key, level pips */
-        u8 kind = hk[view];
-        for (k = 0; k < 4; k++) {
-            u8 sk = kind == K_SF && k < 3 ? 0 : k, x = 20 + times(3, k), lv = H->sk[sk], mx = sk_max(sk), j, st[4];
-            wicon(x, 24, lv ? ATTR(2, 1, T_SKI + (sk << 2)) : ATTR(2, 1, T_LOCK));
-            if (!lv) { b[0] = b[1] = ' '; }
-            else if (kind == K_PUDGE && k == 1) { b[0] = 'O'; b[1] = H->rot ? 'N' : 'F'; }
-            else if (passive(kind, k)) { b[0] = b[1] = ' '; }
-            else if (H->cd[k]) {
-                u16 sec = divs(H->cd[k] + 59, 60);
-                num(sec > 99 ? 99 : sec, 2, b);
-            } else { b[0] = "BCXY"[k]; b[1] = ' '; }
-            b[2] = 0;
-            textW(x, 26, b);
-            for (j = 0; j < 4; j++) st[j] = j < lv ? 2 : (j < mx ? 1 : 0);
-            wtile(x, 27, ATTR(1, 1, T_PIPS + times(3, st[0]) + st[1]));
-            wtile(x + 1, 27, ATTR(1, 1, T_PIPS + times(3, st[2]) + st[3]));
-        }
-        return;
-    }
+    if (part == 1) { abilities(20, 3, T_SKI); return; }
     if (part == 2) {                    /* gold, Blink Dagger, the six item slots */
         u8 n = 0;
         b[0] = '$';
@@ -2561,15 +2553,15 @@ static void hud_draw(void)
 }
 
 /* the view hero's ability icons and portrait (its front pose on an opaque field) into VRAM */
-static void hud_art(void)
+static void hud_art(u8 h, u16 tski, u16 tport)
 {
-    const u32 *src = skill_icons + times(128, hk[view]);   /* 4 icons of 4 tiles of 8 longs */
+    const u32 *src = skill_icons + times(128, hk[h]);   /* 4 icons of 4 tiles of 8 longs */
     u16 k;
-    VDP_CTRL32 = VRAM_W(T_SKI << 5);
+    VDP_CTRL32 = VRAM_W(tski << 5);
     for (k = 128; k; k--) VDP_DATA32 = *src++;
     src = hero_art;
-    for (k = hk[view]; k; k--) src += 81 * 8;
-    VDP_CTRL32 = VRAM_W(T_PORT << 5);
+    for (k = hk[h]; k; k--) src += 81 * 8;
+    VDP_CTRL32 = VRAM_W(tport << 5);
     for (k = 72; k; k--) {
         u32 v = *src++, o = 0;
         u8 n;
@@ -2587,8 +2579,8 @@ static void hud_static(void)
         for (x = 0; x < 4; x++) VDP_DATA = ATTR(0, 1, T_MINIMAP + x * 4 + (y - HUD_Y));
         VDP_DATA = ATTR(1, 1, T_FRAME + 1);
     }
-    if (split) return;
-    hud_art();
+    if (split) { hud_art(0, T_SKI, T_PORT); hud_art(1, T_SKI2, T_PORT2); return; }
+    hud_art(view, T_SKI, T_PORT);
     for (y = 0; y < 3; y++)
         for (x = 0; x < 3; x++) wtile(5 + x, 24 + y, ATTR(un[view].team + 2, 1, T_PORT + times(3, x) + y));
     for (y = 0; y < 3; y++) wtile(9, 24 + y, ATTR(1, 1, T_HICON + y));
@@ -3517,9 +3509,9 @@ static void match(u8 mode)
     match_init(mode);
     clear_planeA();
     pal_set(1, pal_ui);
-    hud_static();
     scn[0] = scn[1] = 0;
     if (versus) split_on();
+    hud_static();
     hud_draw();
     cam_follow(1);
     if (split) { vsel(0); map_load(); vsel(1); }
@@ -3620,7 +3612,11 @@ static void match(u8 mode)
             game_t += DT;
             stc++;
             if (++bot_ph == 6) bot_ph = 0;
-            if ((sec_f += DT) == 60) { sec_f = 0; game_sec++; }
+            if ((sec_f += DT) == 60) {      /* every hero earns 1 gold a second, as in Dota */
+                sec_f = 0;
+                game_sec++;
+                for (u8 k = 0; k < nh; k++) { hr[k].gold++; hr[k].earned++; }
+            }
             build_lists();
             if ((wave_t -= DT) == 0) {
                 spawn_wave();
