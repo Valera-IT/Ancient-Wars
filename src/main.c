@@ -469,8 +469,8 @@ static const s8 dvx[8] = { 64, 45, 0, -45, -64, -45, 0, 45 };
 static const s8 dvy[8] = { 0, 45, 64, 45, 0, -45, -64, -45 };
 static const u8 face_of[9] = { 5, 6, 7, 4, 255, 0, 3, 2, 1 };
 /* Radiant buildings; the Dire ones are the same rotated by 180 degrees */
-static const s16 bld_x[7] = { 104, 104, 400, 296, 624, 384, 176 };
-static const s16 bld_y[7] = { 400, 640, 624, 728, 920, 920, 848 };
+static const s16 bld_x[7] = { 104, 104, 432, 296, 688, 384, 176 };
+static const s16 bld_y[7] = { 336, 640, 592, 728, 920, 920, 848 };
 static const s16 fountain_x[2] = { 64, 960 };      /* by team: index with slot & 1 */
 static const s16 fountain_y[2] = { 960, 64 };
 static const s8 slot_dx[4] = { -9, 9, 0, 0 };

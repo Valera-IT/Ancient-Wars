@@ -867,382 +867,6 @@ def viper_frame(d, f, sh=True, span=1.0):
     return o
 
 
-# ---- shared 32x32 body
-def robe_fill(b, y0, y1, w0, w1, shades, cx=16, trim=None):
-    """a robe from the shoulders (half width w0 at y0) to the hem (w1 at y1), lit from the left"""
-    for y in range(y0, y1 + 1):
-        w = w0 + (w1 - w0) * (y - y0) / max(1, y1 - y0)
-        for x in range(round(cx - w), round(cx + w)):
-            t = (x + 0.5 - (cx - w)) / (2 * w)
-            b[y][x] = shades[2] if t < 0.3 else (shades[1] if t < 0.78 else shades[0])
-    if trim is not None:
-        w = w1
-        for x in range(round(cx - w), round(cx + w)):
-            b[y1][x] = trim
-
-
-def legs32(b, d, f, col, boot, y0=22, y1=27):
-    if d == 2:
-        for x, k in ((13, -1), (17, 1)):                 # back leg, front leg; the step swaps them
-            off = [0, -k * 2, k][f] if f != 1 else -k * 2
-            off = [k, -k, k * 2][f]
-            rect(b, x + off, y0, x + off + 2, y1 - 1, col)
-            rect(b, x + off, y1 - 1, x + off + 3, y1, boot)
-    else:
-        lift = [(0, 0), (2, 0), (0, 0)][f]
-        for k, x in enumerate((12, 17)):
-            rect(b, x, y0 - lift[k], x + 2, y1 - 1 - lift[k], col)
-            rect(b, x, y1 - 1 - lift[k], x + 2, y1 - lift[k], boot)
-
-
-def arms32(b, d, f, col, hand, sy=15, wide=6):
-    sw = 1 if f == 1 else 0
-    if d == 2:
-        line(b, 16, sy, 17 + sw, sy + 6, col, 2)
-        disc(b, 18 + sw, sy + 7.5, 1.4, hand)
-    else:
-        line(b, 16 - wide, sy, 15 - wide, sy + 6 - sw, col, 2)
-        line(b, 15 + wide, sy, 16 + wide, sy + 6 - (1 - sw), col, 2)
-        disc(b, 16 - wide, sy + 7.5 - sw, 1.4, hand)
-        disc(b, 17 + wide, sy + 6.5 + sw, 1.4, hand)
-
-
-def head32(b, d, hx, hy, skin, r=5.2, eyes=1):
-    shade_sphere(b, hx, hy, r, skin)
-    if d == 0:
-        put(b, hx - 2, hy + 1, eyes)
-        put(b, hx + 1, hy + 1, eyes)
-    elif d == 2:
-        put(b, hx + 2, hy + 1, eyes)
-
-
-def finish(b, d, f, rx=9):
-    b = add_outline(b)
-    o = bmp(32, 32)
-    shadow(o, 16, 28, rx, 3)
-    for y in range(32):
-        for x in range(32):
-            if b[y][x]:
-                o[y][x] = b[y][x]
-    return o
-
-
-def crescent(b, cx, cy, rx, ry, horiz=False, flip=False):
-    """an axe blade: a grey half-moon out from the haft at (cx, cy), its cutting edge lit"""
-    for y in range(32):
-        for x in range(32):
-            u, v = (x + 0.5 - cx) / rx, (y + 0.5 - cy) / ry
-            if horiz:
-                u, v = v, u
-            if flip:
-                u = -u
-            if u >= 0 and u * u + v * v <= 1 and not (u < 0.35 and abs(v) > 0.45):
-                b[y][x] = 5 if u * u + v * v > 0.55 else (4 if v < 0.2 else 3)
-
-
-# ---- Axe (palette line 3: red skin)
-AXE_SKIN = [14, 10, 12]
-def axe32(d, f):
-    b = bmp(32, 32)
-    hx = 17 if d == 2 else 16
-    if d == 1 and f != 2:                                # axe on his back seen from behind
-        line(b, 8, 26, 24, 4, 7)
-        crescent(b, 23, 6, 4.5, 5, horiz=True, flip=True)
-    legs32(b, d, f, 2, 13)
-    shade_sphere(b, 16, 17, 0, AXE_SKIN, rx=7.5 if d != 2 else 5.5, ry=5.5)   # bare red torso
-    if d != 1:
-        line(b, 10, 13, 21, 21, 13, 2)                   # leather strap across the chest
-    else:
-        line(b, 22, 13, 11, 21, 13, 2)
-    rect(b, 9, 21, 23, 22, 13)                           # belt with a gold buckle
-    put(b, 16, 21, 15)
-    put(b, 16, 22, 15)
-    if d != 2:
-        shade_sphere(b, 8.5, 13.5, 3, [2, 3, 4])         # pauldrons
-        shade_sphere(b, 23.5, 13.5, 3, [2, 3, 4])
-    else:
-        shade_sphere(b, 16, 13.5, 3, [2, 3, 4])
-    if f != 2:
-        arms32(b, d, f, 10, 10, sy=15, wide=8)
-    head32(b, d, hx, 8, AXE_SKIN, r=4.6)
-    rect(b, hx - 3, 3, hx + 3, 4, 1)                     # black hair, topknot
-    rect(b, hx - 1, 0, hx + 1, 3, 1)
-    if d != 1:
-        rect(b, hx - 2 + (1 if d == 2 else 0), 11, hx + 2, 13, 1)    # beard
-        put(b, hx + (1 if d == 2 else 0), 14, 1)
-        if d == 0:
-            put(b, hx - 2, 9, 15)
-            put(b, hx + 1, 9, 15)
-        else:
-            put(b, hx + 2, 9, 15)
-    else:
-        rect(b, hx - 3, 4, hx + 3, 9, 1)
-    blade = [2, 3, 4, 5]
-    if f == 2:                                           # the chop
-        if d == 0:
-            line(b, 22, 15, 20, 29, 7, 2)
-            crescent(b, 20, 25, 5, 5.5, horiz=True)
-            line(b, 23, 15, 21, 19, 10, 2)
-        elif d == 1:
-            line(b, 22, 15, 21, 2, 7, 2)
-            crescent(b, 21, 6, 5, 5.5, horiz=True, flip=True)
-            line(b, 23, 15, 22, 11, 10, 2)
-        else:
-            line(b, 17, 15, 30, 13, 7, 2)
-            crescent(b, 26, 13, 5, 5.5)
-            line(b, 16, 15, 21, 15, 10, 2)
-    elif d != 1:
-        x = 26 if d == 0 else 24
-        line(b, x, 5 - (f & 1), x, 27 - (f & 1), 7)      # haft held upright
-        crescent(b, x + 1, 6.5 - (f & 1), 4.5, 5.5)      # double blade
-        crescent(b, x, 6.5 - (f & 1), 4.5, 5.5, flip=True)
-    return finish(b, d, f, 10)
-
-
-# ---- Sniper (keen: short, big helmet, long rifle)
-SN_SKIN = [7, 6, 6]
-def sniper32(d, f):
-    b = bmp(32, 32)
-    hx = 17 if d == 2 else 16
-    if f == 2:
-        gun = {0: ((16, 18), (16, 31)), 1: ((16, 15), (16, 1)), 2: ((17, 18), (31, 18))}[d]
-    else:
-        gun = ((7, 26), (26, 7)) if d != 1 else ((6, 8), (25, 26))
-    if d == 1:
-        line(b, *gun[0], *gun[1], 2, 2)
-    legs32(b, d, f, 7, 14, y0=23)
-    shade_sphere(b, 16, 19.5, 0, [9, 10, 11], rx=6 if d != 2 else 4.5, ry=4.5)   # green coat
-    rect(b, 10, 21, 22, 22, 14)
-    put(b, 15, 21, 15)
-    if d != 1:
-        arms32(b, d, f, 10, 6, sy=17, wide=6)
-        line(b, *gun[0], *gun[1], 2, 2)                  # rifle: dark barrel, wooden stock
-        line(b, gun[0][0], gun[0][1], (gun[0][0] * 2 + gun[1][0]) // 3, (gun[0][1] * 2 + gun[1][1]) // 3, 7, 2)
-        put(b, *gun[1], 15 if f == 2 else 4)
-        if f == 2:
-            put(b, gun[1][0] + (1 if d == 2 else 0), gun[1][1] + (1 if d == 0 else 0), 5)
-    else:
-        arms32(b, d, f, 10, 6, sy=17, wide=6)
-    head32(b, d, hx, 11, SN_SKIN, r=5)
-    # brass helmet with goggles
-    for y in range(3, 10):
-        for x in range(hx - 6, hx + 7):
-            if ((x + 0.5 - hx) / 6.2) ** 2 + ((y + 0.5 - 9) / 5.6) ** 2 <= 1:
-                b[y][x] = 15 if (x - hx) < -1 and y < 7 else 7
-    rect(b, hx - 6, 9, hx + 6, 9, 14)                    # brim
-    if d == 0:
-        rect(b, hx - 4, 6, hx + 3, 7, 2)
-        disc(b, hx - 2, 6.5, 1.3, 8)
-        disc(b, hx + 2, 6.5, 1.3, 8)
-        rect(b, hx - 4, 13, hx + 4, 16, 15)               # bushy beard
-        put(b, hx, 17, 15)
-        rect(b, hx - 2, 13, hx + 2, 13, 7)
-    elif d == 2:
-        disc(b, hx + 3, 6.5, 1.3, 8)
-        rect(b, hx, 13, hx + 4, 16, 15)
-    return finish(b, d, f, 8)
-
-
-# ---- Zeus (white robe, white beard, lightning)
-ZEUS_SKIN = [7, 6, 6]
-def zeus32(d, f):
-    b = bmp(32, 32)
-    hx = 17 if d == 2 else 16
-    robe_fill(b, 14, 27, 5, 8, [3, 4, 5], trim=8)
-    rect(b, 11, 19, 21, 19, 8)                           # blue sash
-    if d == 2:
-        for y in range(14, 28):
-            for x in range(8, 11):
-                b[y][x] = 0
-    if f != 2:
-        arms32(b, d, f, 4, 7, sy=15, wide=6)
-        if d != 1:
-            put(b, 9 + (f & 1), 23, 8)                   # sparks in his hands
-            put(b, 24, 22, 15)
-    head32(b, d, hx, 9, ZEUS_SKIN, r=5)
-    for y in range(2, 9):                                # white hair, combed back
-        for x in range(hx - 6, hx + 7):
-            if ((x + 0.5 - hx) / 6) ** 2 + ((y + 0.5 - 8) / 5.5) ** 2 <= 1 and (d == 1 or y < 7 or abs(x - hx) > 4):
-                b[y][x] = 5 if x - hx < 1 else 4
-    if d == 1:
-        rect(b, hx - 5, 7, hx + 5, 15, 4)
-        rect(b, hx - 4, 7, hx + 3, 14, 5)
-    else:
-        bx = 1 if d == 2 else 0
-        rect(b, hx - 3 + bx, 11, hx + 3, 16, 5)          # long beard
-        rect(b, hx - 2 + bx, 17, hx + 2, 18, 4)
-        put(b, hx + bx, 19, 4)
-        for x in ((hx - 2, hx + 1) if d == 0 else (hx + 2,)):    # eyes under bushy white brows
-            put(b, x, 10, 1)
-            put(b, x, 9, 4)
-            put(b, x + 1 if x > hx else x - 1, 9, 4)
-    if f == 2:                                           # arm thrown out with a bolt
-        if d == 0:
-            line(b, 21, 15, 23, 21, 4, 2)
-            for p in ((23, 23), (22, 24), (24, 25), (23, 26), (25, 27), (24, 28), (26, 29)):
-                put(b, *p, 15)
-            put(b, 24, 22, 5)
-        elif d == 1:
-            line(b, 21, 15, 23, 8, 4, 2)
-            for p in ((23, 6), (22, 5), (24, 4), (23, 3), (25, 2), (24, 1)):
-                put(b, *p, 15)
-        else:
-            line(b, 17, 15, 23, 13, 4, 2)
-            for p in ((25, 13), (26, 12), (27, 14), (28, 13), (29, 15), (30, 14), (31, 16)):
-                put(b, *p, 15)
-            put(b, 24, 13, 5)
-    return finish(b, d, f, 9)
-
-
-# ---- Lina (palette line 3: flame hair, red dress)
-LINA_SKIN = [7, 6, 6]
-def lina32(d, f):
-    b = bmp(32, 32)
-    hx = 17 if d == 2 else 16
-    robe_fill(b, 14, 27, 4, 7.5, [9, 10, 11], trim=15)
-    if f != 2:
-        arms32(b, d, f, 6, 6, sy=15, wide=5)
-        if d != 1:
-            put(b, 10, 21 - (f & 1), 15)                 # embers in her hands
-            put(b, 22, 20 + (f & 1), 11)
-    head32(b, d, hx, 9, LINA_SKIN, r=4.8)
-    # hair: swept up and back into flame tongues
-    flick = f & 1
-    for k, x in enumerate(range(hx - 5, hx + 6)):
-        top = 1 + ((k * 3 + flick) % 4)
-        for y in range(top, 7 if d != 1 else 12):
-            b[y][x] = 15 if y < top + 1 else (11 if y < top + 3 else 10)
-    rect(b, hx - 6, 6, hx - 5, 13, 10)
-    rect(b, hx + 5, 6, hx + 6, 13, 10)
-    if d == 1:
-        rect(b, hx - 5, 6, hx + 5, 14, 10)
-        rect(b, hx - 3, 8, hx + 3, 13, 11)
-    if f == 2:                                           # a fireball thrown forward
-        if d == 0:
-            line(b, 11, 15, 14, 21, 6, 2)
-            line(b, 21, 15, 18, 21, 6, 2)
-            shade_sphere(b, 16, 25, 3.2, [10, 11, 15, 5])
-        elif d == 1:
-            line(b, 11, 15, 13, 9, 6, 2)
-            line(b, 21, 15, 19, 9, 6, 2)
-            shade_sphere(b, 16, 4, 3.2, [10, 11, 15, 5])
-        else:
-            line(b, 17, 15, 23, 15, 6, 2)
-            shade_sphere(b, 27, 15, 3.2, [10, 11, 15, 5])
-    return finish(b, d, f, 8)
-
-
-# ---- Crystal Maiden (blue hooded cloak, staff)
-CM_SKIN = [7, 6, 5]
-CM_CLOAK = [3, 8, 5]
-def cm32(d, f):
-    b = bmp(32, 32)
-    hx = 17 if d == 2 else 16
-    sx = 25 if d == 0 else (22 if d == 2 else 7)
-    if d == 1 and f != 2:
-        line(b, sx, 4, sx, 27, 7)
-    robe_fill(b, 13, 27, 5.5, 9, CM_CLOAK, trim=5)
-    if d != 1:
-        robe_fill(b, 15, 27, 2, 3.5, [4, 5, 5])          # white dress between the cloak flaps
-    if f != 2:
-        arms32(b, d, f, 8, 6, sy=15, wide=6)
-    if d != 1 and f != 2:
-        line(b, sx, 4 - (f & 1), sx, 27 - (f & 1), 7)    # staff
-        shade_sphere(b, sx, 3.5 - (f & 1), 2.3, [8, 5, 5])
-    shade_sphere(b, hx, 9, 6, CM_CLOAK)                  # hood
-    if d != 1:
-        ox = 1 if d == 2 else 0
-        shade_sphere(b, hx + ox, 10, 3.6, CM_SKIN, rx=3.4, ry=3.8)   # face in the hood
-        rect(b, hx - 3 + ox, 7, hx + 3 + ox, 7, 5)       # white fringe
-        if d == 0:
-            put(b, hx - 2, 10, 1)
-            put(b, hx + 1, 10, 1)
-        else:
-            put(b, hx + 2, 10, 1)
-    else:
-        rect(b, hx - 1, 4, hx + 1, 14, 3)
-    if f == 2:                                           # staff thrust forward in a burst of frost
-        if d == 0:
-            line(b, 21, 15, 20, 28, 7)
-            line(b, 21, 15, 21, 20, 8, 2)
-            pts = (20, 29)
-        elif d == 1:
-            line(b, 21, 15, 21, 2, 7)
-            line(b, 21, 15, 22, 10, 8, 2)
-            pts = (21, 2)
-        else:
-            line(b, 16, 15, 29, 11, 7)
-            line(b, 16, 15, 21, 15, 8, 2)
-            pts = (29, 11)
-        x, y = pts
-        for dx, dy in ((0, 0), (-1, 0), (1, 0), (0, -1), (0, 1), (-2, -2), (2, 2), (2, -2), (-2, 2)):
-            put(b, x + dx, y + dy, 5 if dx == dy == 0 else 8)
-    return finish(b, d, f, 9)
-
-
-# ---- Drow Ranger (pale blue skin, white hair, dark hood, bow)
-DROW_SKIN = [3, 8, 5]
-def drow32(d, f):
-    b = bmp(32, 32)
-    hx = 17 if d == 2 else 16
-    if d != 2:
-        robe_fill(b, 13, 25, 5, 8, [2, 2, 3])            # dark cloak behind
-    legs32(b, d, f, 2, 1)
-    shade_sphere(b, 16, 18, 0, [9, 10, 10], rx=5.5 if d != 2 else 4, ry=5)   # green leather tunic
-    rect(b, 11, 21, 21, 21, 14)
-    if d == 1:
-        rect(b, 19, 11, 21, 20, 14)                      # quiver
-        for x in (19, 21):
-            put(b, x, 10, 5)
-        robe_fill(b, 13, 25, 4, 7, [2, 2, 3])
-    if f != 2:
-        arms32(b, d, f, 3, 8, sy=15, wide=6)
-        if d != 1:
-            bx = 24 if d == 0 else 21                    # bow held at the side
-            line(b, bx, 9, bx + 2, 14, 7)
-            line(b, bx + 2, 14, bx + 2, 20, 7)
-            line(b, bx + 2, 20, bx, 25, 7)
-            line(b, bx, 9, bx, 25, 4)
-    head32(b, d, hx, 9, DROW_SKIN, r=4.6)
-    shade_sphere(b, hx, 7.5, 5.8, [2, 2, 3], rx=6, ry=5)   # dark hood
-    if d != 1:
-        ox = 1 if d == 2 else 0
-        shade_sphere(b, hx + ox, 10, 3.3, DROW_SKIN, rx=3.2, ry=3.4)
-        rect(b, hx - 4 + ox, 8, hx - 3 + ox, 15, 5)       # white hair falling out of the hood
-        rect(b, hx + 3 + ox, 8, hx + 4 + ox, 15, 4)
-        if d == 0:
-            put(b, hx - 2, 10, 1)
-            put(b, hx + 1, 10, 1)
-        else:
-            put(b, hx + 2, 10, 1)
-    else:
-        rect(b, hx - 3, 10, hx + 3, 17, 5)
-        rect(b, hx + 1, 10, hx + 3, 17, 4)
-    if f == 2:                                           # bow drawn, arrow nocked
-        if d == 0:
-            line(b, 10, 23, 16, 26, 7)
-            line(b, 16, 26, 22, 23, 7)
-            line(b, 10, 23, 22, 23, 4)
-            line(b, 16, 17, 16, 29, 5)
-            put(b, 16, 30, 3)
-            line(b, 11, 15, 15, 21, 3, 2)
-            line(b, 21, 15, 17, 21, 3, 2)
-        elif d == 1:
-            line(b, 10, 8, 16, 5, 7)
-            line(b, 16, 5, 22, 8, 7)
-            line(b, 10, 8, 22, 8, 4)
-            line(b, 16, 14, 16, 3, 5)
-        else:
-            line(b, 25, 8, 27, 14, 7)
-            line(b, 27, 14, 27, 18, 7)
-            line(b, 27, 18, 25, 24, 7)
-            line(b, 25, 8, 25, 24, 4)
-            line(b, 18, 16, 30, 16, 5)
-            line(b, 17, 15, 25, 16, 3, 2)
-    return finish(b, d, f, 8)
-
-
-# ---- Juggernaut (tiki mask, red crest, bare chest, katana)
 # ------------------------------------------------------------ hand-drawn 32x32 kit
 def mirror_rows(half):
     """a front or back view drawn as its left half; the right half is the mirror image"""
@@ -1426,6 +1050,783 @@ JUGG_POSES = (
 
 def jugg_frame(d, f, sh=True):
     return ascii_frame(JUGG_POSES, JUGG_COLS, d, f, sh)
+
+
+# Axe: red-skinned brute, black topknot and beard, steel pauldrons, a double-bitted battle axe
+AXE_COLS = {"#": 1, "S": 12, "s": 10, "k": 14, "D": 13, "Y": 15, "h": 2, "H": 3, "W": 4, "V": 5, "t": 7, "O": 11, "g": 9, "w": 4}
+AXE_S_HALF = [
+"                ",
+"               #",
+"              #h",
+"             #hH",
+"            ##hh",
+"           #hhhh",
+"           #hSSS",
+"           #k##S",
+"           #kSYs",
+"           #ksSS",
+"           #k#hh",
+"      #### #khhh",
+"    ##HHHH##khhh",
+"   #HVVVHHH#Shhh",
+"  #HVWWHHHH#SShh",
+"  #HVWHHHHk#SSSh",
+"  #hHHHHkSs#SSSs",
+"  ##hhhh#sSs#SSs",
+"   #kSSs#sSSs#Ss",
+"   #kSSs#ssSSs#s",
+"   #kSss#kssSSss",
+"   #kssD#kkssssk",
+"   #ksD##kOOOOOO",
+"   #SSs##kOYYOgO",
+"   #sSs# #ghhhhh",
+"    #k#  #hhhhhh",
+"     #   #hhhhh#",
+"         #hhhhh#",
+"         #kkkkk#",
+"          ######",
+]
+AXE_N_HALF = [
+"                ",
+"               #",
+"              #h",
+"             #hH",
+"            ##hh",
+"           #hhhh",
+"           #hhhh",
+"           #khhh",
+"           #kshh",
+"           #kSSh",
+"           #ksSS",
+"      #### #ksss",
+"    ##HHHH##kSSS",
+"   #HVVVHHH#sSSS",
+"  #HVWWHHHH#sSSS",
+"  #HVWHHHHk#sSSs",
+"  #hHHHHkSs#sSSs",
+"  ##hhhh#sSs#sSs",
+"   #kSSs#sSSs#ss",
+"   #kSSs#ssSSsks",
+"   #kSss#kssSSss",
+"   #kssD#kkssssk",
+"   #ksD##kOOOOOO",
+"   #SSs##kOOOOgO",
+"   #sSs# #ghhhhh",
+"    #k#  #hhhhhh",
+"     #   #hhhhh#",
+"         #hhhhh#",
+"         #kkkkk#",
+"          ######",
+]
+AXE_E = [
+"                                ",
+"              ##                ",
+"             #hh#               ",
+"            #hHh#               ",
+"           ##hh##               ",
+"         ##hhhhhh##             ",
+"        #hhhhhSSSSS#            ",
+"        #hhhhSSSSSSS#           ",
+"        #hhhkSS###SS#           ",
+"        #hhhkSSSY#SSS#          ",
+"        #hhkssSSSSSSS#          ",
+"        #hhkss#hhhsss#          ",
+"       ##hkkshhhhhhhh#          ",
+"     ##HHH#khhhhhhhhh#          ",
+"    #HVVHHH#hhhhHhhh#           ",
+"   #HVWHHHHH#hhhhhh#            ",
+"   #HWHHHHHk#hhhhh#             ",
+"   #hHHHHkSs#Shhhs#             ",
+"   ##hhhh#sSs#SSss#             ",
+"     #ss#ssSSSsSss#             ",
+"     #ks#sSSSSSSss#             ",
+"     #k##kssssssk#              ",
+"      ##kOOOOOOOO#              ",
+"       #kOOOOYYOO#              ",
+"       ##ghhhhhhh#              ",
+"       #hhhhhhhhhh#             ",
+"      #hhhh##hhhhhh#            ",
+"      #hhh#  #hhhhh#            ",
+"      #kkkk# #kkkkkk#           ",
+"       ####   ######            ",
+]
+_AS, _AN = mirror_rows(AXE_S_HALF), mirror_rows(AXE_N_HALF)
+AXE_V = ["##         ##", "#V#       #V#", "#VW#     #WV#", "#VWW#####WWV#", "#VWWHHtHHWWV#", "#VWW#####WWV#",
+         "#VW#     #WV#", "#V#       #V#", "##         ##"]
+AXE_H = ["".join(r[i] for r in AXE_V) for i in range(9)]
+def axe_haft(rows, x0, y0, x1, y1):
+    """the haft from the fist (x0, y0) to (x1, y1), straight up/down or across, with a double-bit
+    crescent head stamped at (x1, y1)"""
+    r = pad_rows(katana(rows, x0, y0, x1, y1, 0, "ttt"))
+    st = AXE_V if x0 == x1 else AXE_H
+    h, w = len(st), len(st[0])
+    for y, row in enumerate(st):
+        for x, ch in enumerate(row):
+            X, Y = x1 - w // 2 + x, y1 - h // 2 + y
+            if ch != " " and 0 <= X < 32 and 0 <= Y < 32:
+                r[Y][X] = ch
+    return ["".join(q) for q in r]
+AXE_POSES = (
+    axe_haft(_AS, 27, 25, 27, 7),
+    axe_haft(_AN, 4, 25, 4, 7),
+    axe_haft(limb(AXE_E, [(12, 16), (13, 20), (17, 21)], ("S", "s"), (2, "D")), 19, 26, 19, 5),
+    overlay(axe_haft(_AS, 27, 25, 6, 25), [(x, 29, "w") for x in range(9, 24)]),      # low cleave across the front
+    axe_haft(_AN, 27, 18, 27, 4),                                                    # raised overhead
+    axe_haft(limb(AXE_E, [(12, 15), (16, 15), (20, 15)], ("S", "s"), (2, "D")), 20, 16, 27, 16),   # chop forward
+)
+
+
+def axe_frame(d, f, sh=True):
+    return ascii_frame(AXE_POSES, AXE_COLS, d, f, sh, 11)
+
+
+
+# Sniper: a short Keen in a steel helmet with goggles, a bushy beard, green coat and a long scoped rifle
+SNIPER_COLS = {"#": 1, "S": 6, "s": 7, "k": 14, "B": 7, "b": 14, "D": 13, "h": 2, "H": 3, "W": 4, "V": 5, "8": 8,
+        "G": 10, "g": 9, "L": 11, "t": 7, "Y": 15}
+SNIPER_S_HALF = [
+"                ",
+"                ",
+"                ",
+"                ",
+"          ######",
+"         #VWWWWW",
+"        #VWWWWHH",
+"       #HVWWHHHH",
+"      #hHHHHHHHH",
+"     #hhh#######",
+"      ##S#88#SSS",
+"       #S#8V#SSS",
+"       #ks##SSSs",
+"       #kBBBsSSs",
+"       #kBBBBBBb",
+"       #BBBbBBBB",
+"      ##BBbBBBBb",
+"    ##gG#BBbBBBB",
+"   #gGLG#kBBbBBB",
+"   #gGLG#GkBBbBB",
+"   #gGGG#GGkBBbB",
+"   #SSs##GGGkBBB",
+"   #ss# #hhYhkkk",
+"    ##  #hhhhhhh",
+"        #gGGGGGG",
+"        #gGG##GG",
+"       #hhhh##hh",
+"       #hhhh##hh",
+"        ####  ##",
+]
+SNIPER_N_HALF = [
+"                ",
+"                ",
+"                ",
+"                ",
+"          ######",
+"         #VWWWWW",
+"        #VWWWWWW",
+"       #HVWWWWHH",
+"      #hHHHHHHHH",
+"     #hhhHHHHHHH",
+"      ##hhhhhhhh",
+"       #ks#hhhhh",
+"       #ksSSSSSs",
+"       #kssSSSSs",
+"       #kGGGGGGG",
+"      ##gGGGGGGG",
+"      #gGGLGGGGG",
+"    ##gG#gGGGLGG",
+"   #gGLG#gGGGGLG",
+"   #gGLG#gGGGGGG",
+"   #gGGG#ggGGGGG",
+"   #SSs##ggGGGGG",
+"   #ss# #hhhhkkk",
+"    ##  #hhhhhhh",
+"        #gGGGGGG",
+"        #gGG##GG",
+"       #hhhh##hh",
+"       #hhhh##hh",
+"        ####  ##",
+]
+SNIPER_E = [
+"                                ",
+"                                ",
+"                                ",
+"                                ",
+"           ######               ",
+"         ##VWWWWW#              ",
+"        #VVWWWWWHH#             ",
+"       #HVWWWWHHHHH#            ",
+"      #hHHHHHHHHHHHH##          ",
+"      #hhhhhh########           ",
+"       #hhhSS#88#SS#            ",
+"       #hhhSS#8V#SSS#           ",
+"       #khsSSs##SSSS#           ",
+"       #kkssSSBBBSSs#           ",
+"        #kssBBBBBBBB#           ",
+"        #kkBBBBbBBBB#           ",
+"         #BBBBbBBBB#            ",
+"        ##gBBBbBBB#             ",
+"       #gGGgBBbBB#              ",
+"       #gGGGkBBB#               ",
+"       #gGGGGkB#                ",
+"       #ggGGGGG#                ",
+"       #hhhhYhh#                ",
+"       #hhhhhhh#                ",
+"       #gGGGGGG#                ",
+"      #gGGG#gGGG#               ",
+"      #hhhh#hhhhh#              ",
+"      #hhhh#hhhhhh#             ",
+"       ####  #####              ",
+]
+_SS, _SN = mirror_rows(SNIPER_S_HALF), mirror_rows(SNIPER_N_HALF)
+def rifle(rows, x0, y0, x1, y1, flash=False):
+    """stock from (x0, y0), a long barrel to the muzzle at (x1, y1), a dark scope on top"""
+    r = katana(rows, x0, y0, x1, y1, 5, "tHh")
+    n = max(abs(x1 - x0), abs(y1 - y0))
+    sx, sy = round(x0 + (x1 - x0) * 0.45), round(y0 + (y1 - y0) * 0.45)
+    pts = [(sx, sy, "8"), (sx + (1 if x0 == x1 else 0), sy - (0 if x0 == x1 else 1), "#")]
+    if flash:
+        dx, dy = (x1 > x0) - (x1 < x0), (y1 > y0) - (y1 < y0)
+        pts += [(x1 + dx, y1 + dy, "V"), (x1 + 2 * dx, y1 + 2 * dy, "Y"), (x1 + dx - dy, y1 + dy + dx, "Y"),
+                (x1 + dx + dy, y1 + dy - dx, "Y")]
+    return overlay(r, [(x, y, c) for x, y, c in pts if 0 <= x < 32 and 0 <= y < 32])
+SNIPER_POSES = (
+    rifle(_SS, 26, 25, 26, 3),                                   # rifle stood upright at his side
+    rifle(_SN, 5, 25, 5, 3),
+    rifle(limb(SNIPER_E, [(12, 18), (15, 21)], ("S", "s")), 17, 23, 29, 11),
+    rifle(_SS, 24, 17, 18, 23, True),                            # firing at the camera, the barrel foreshortened
+    rifle(_SN, 23, 21, 20, 3, True),
+    rifle(limb(SNIPER_E, [(11, 17), (15, 17)], ("S", "s")), 10, 17, 31, 16, True),   # aimed level
+)
+
+
+def sniper_frame(d, f, sh=True):
+    return ascii_frame(SNIPER_POSES, SNIPER_COLS, d, f, sh, 10)
+
+
+# Zeus: a white-haired old god with bushy brows and a long beard, grey robe trimmed in gold, lightning in hand
+ZEUS_COLS = {"#": 1, "S": 6, "s": 7, "k": 14, "V": 5, "W": 4, "H": 3, "h": 2, "8": 8, "Y": 15, "D": 13}
+ZEUS_S_HALF = [
+"                ",
+"                ",
+"           #####",
+"         ##VVVVV",
+"        #VVWVVVV",
+"       #VWWVVVVV",
+"       #VW#SSSSS",
+"      #VW#VVV#SS",
+"      #VW#S8#SSS",
+"      #WV#sSSSsS",
+"      #WV#VVVVVs",
+"       #WVVVVVVV",
+"    ####WVVVWVVV",
+"   #WWW#WVVVVWVV",
+"  #WWWHH#WVVVVWV",
+"  #WWWHH#WWVVVVW",
+"  #WWHHH##WWVVVV",
+"  #WWHHh#H#WWVVV",
+"  #YYYYY#HH#WWVV",
+"  #SSss#WWHH#WWV",
+"  #Ssk##WWWH#8#W",
+"   ##  #YYYYYY8Y",
+"       #WWWHHHH#",
+"      #WWWWHHHHH",
+"      #WWWWHHHHH",
+"     #WWWWWHHHHH",
+"     #WWWWHHHHHH",
+"     #YYYYYYYYYY",
+"      ##########",
+]
+ZEUS_N_HALF = [
+"                ",
+"                ",
+"           #####",
+"         ##VVVVV",
+"        #VVWVVVV",
+"       #VWWVVVVV",
+"       #VWVVVVVV",
+"      #VWVVVVVVV",
+"      #VWVVVWVVV",
+"      #WVVVWVVVV",
+"      #WVVVVVWVV",
+"       #WVVVVVVV",
+"    ####WWVVWVVV",
+"   #WWW#HWWVVWVV",
+"  #WWWHH#HWWVVVW",
+"  #WWWHH#HHWWWVV",
+"  #WWHHH#WHHWWWW",
+"  #WWHHh#WWHHHHW",
+"  #YYYYY#WWWHHHH",
+"  #SSss#WWWWHHHH",
+"  #Ssk##WWWWHHHH",
+"   ##  #YYYYYY8Y",
+"       #WWWHHHH#",
+"      #WWWWHHHHH",
+"      #WWWWHHHHH",
+"     #WWWWWHHHHH",
+"     #WWWWHHHHHH",
+"     #YYYYYYYYYY",
+"      ##########",
+]
+ZEUS_E = [
+"                                ",
+"                                ",
+"           #####                ",
+"         ##VVVVV##              ",
+"        #VVWVVVVVV#             ",
+"       #VWWVVVVVVVV#            ",
+"       #VWVVVSSSSSSS#           ",
+"      #VWVVVSSVVV#SS#           ",
+"      #VWVVVSSS8#SSSS#          ",
+"      #WVVVVSssSSSSS#           ",
+"      #WVVVWsVVVVVVV#           ",
+"       #WVVVVVVVVVVV#           ",
+"      ##WWVVVWVVVVWV#           ",
+"     #WWWWVVVVWVVVW#            ",
+"     #WWHHWVVVVWVV#             ",
+"     #WWHHWWVVVVW#              ",
+"     #WWHHHWWVVV#               ",
+"     #WWHHHHWWV#                ",
+"     #WWWHHHH##                 ",
+"     #WWWHHHHH#                 ",
+"     #WWWWHHHH#                 ",
+"     #YYYYYY8Y#                 ",
+"     #WWWWHHHH#                 ",
+"    #WWWWWHHHHH#                ",
+"    #WWWWWHHHHH#                ",
+"   #WWWWWWHHHHHH#               ",
+"   #WWWWWHHHHHHH#               ",
+"   #YYYYYYYYYYYY#               ",
+"    ############                ",
+]
+_ZS, _ZN = mirror_rows(ZEUS_S_HALF), mirror_rows(ZEUS_N_HALF)
+def bolt_through(rows, pts):
+    """a zig-zag of lightning through the points: white core, yellow edges"""
+    r = pad_rows(rows)
+    out = []
+    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+        n = max(abs(x1 - x0), abs(y1 - y0), 1)
+        for i in range(n + 1):
+            out.append((round(x0 + (x1 - x0) * i / n), round(y0 + (y1 - y0) * i / n)))
+    for x, y in out:
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            X, Y = x + dx, y + dy
+            if 0 <= X < 32 and 0 <= Y < 32 and (X, Y) not in out and r[Y][X] == " ":
+                r[Y][X] = "Y"
+    for x, y in out:
+        if 0 <= x < 32 and 0 <= y < 32:
+            r[y][x] = "V"
+    return ["".join(q) for q in r]
+def crackle(rows, x, y):
+    return overlay(rows, [(x, y, "V"), (x - 1, y, "Y"), (x + 1, y, "Y"), (x, y - 1, "Y"), (x, y + 1, "8")])
+ZEUS_ARM_E = [(8, 15), (9, 19), (11, 21)]
+ZEUS_POSES = (
+    crackle(_ZS, 4, 20),                                                            # a crackle in the open hand
+    crackle(_ZN, 27, 20),
+    crackle(limb(ZEUS_E, ZEUS_ARM_E, ("W", "H"), (1, "S")), 13, 22),
+    bolt_through(_ZS, [(27, 17), (25, 12), (29, 8), (26, 2)]),                         # arm up, a bolt called down
+    bolt_through(_ZN, [(4, 17), (6, 12), (2, 8), (5, 2)]),
+    bolt_through(limb(ZEUS_E, [(8, 16), (13, 18), (18, 18)], ("W", "H"), (1, "S")), [(20, 18), (23, 15), (26, 19), (31, 16)]),
+)
+
+
+def zeus_frame(d, f, sh=True):
+    return ascii_frame(ZEUS_POSES, ZEUS_COLS, d, f, sh, 10)
+
+
+# Lina: hair rising in flames, a crimson gown with a gold girdle, fire cupped in her hand
+LINA_COLS = {"#": 1, "S": 6, "s": 7, "k": 14, "r": 12, "D": 13, "O": 11, "G": 10, "g": 9, "Y": 15, "V": 5}
+LINA_S_HALF = [
+"          #    #",
+"         #Y#  #Y",
+"     #  #OY# #OY",
+"    #Y# #OO##OOO",
+"    #OY##GOO#GOO",
+"     #OO#GOOGGOO",
+"     #GOOGGOOGGO",
+"      #GGrrGGrrG",
+"      #GrrGSSSSS",
+"      #Gr#rSSSSS",
+"      #Gr#rS#SSS",
+"      #Gr#rsSSSS",
+"      #Gr##rsSSr",
+"      #GrG##ssss",
+"      #rG#sSSSSS",
+"     #SS#rrrrrrr",
+"     #SS#rrrrrrr",
+"     #Ss#Drrrrrr",
+"     #Ss#DrrYrrr",
+"     #ss#DrrrYYY",
+"     #SS#DDrrrrr",
+"     #Ss##Drrrrr",
+"      ##  #Drrrr",
+"         #DDrrrr",
+"        #DDrrrrr",
+"        #DDrrrrr",
+"       #DDDrrrrr",
+"       #kkkkkkkk",
+"        ########",
+]
+LINA_N_HALF = [
+"          #    #",
+"         #Y#  #Y",
+"     #  #OY# #OY",
+"    #Y# #OO##OOO",
+"    #OY##GOO#GOO",
+"     #OO#GOOGGOO",
+"     #GOOGGOOGGO",
+"      #GGOGGOOGG",
+"      #GGOGGOGGO",
+"      #GrGGOGGOG",
+"      #GrGOGGOGG",
+"      #GrGGGOGGO",
+"      #GrrGGGOGG",
+"      #GrGrGGGOG",
+"      #rG#rGGGGO",
+"     #SS#rrrGGGG",
+"     #SS#rrrrGGG",
+"     #Ss#DrrrrrG",
+"     #Ss#DrrYrrr",
+"     #ss#DrrrYYY",
+"     #SS#DDrrrrr",
+"     #Ss##Drrrrr",
+"      ##  #Drrrr",
+"         #DDrrrr",
+"        #DDrrrrr",
+"        #DDrrrrr",
+"       #DDDrrrrr",
+"       #kkkkkkkk",
+"        ########",
+]
+LINA_E = [
+"           #   #                ",
+"          #Y# #Y#               ",
+"     #   #OY##OY#  #            ",
+"    #Y# #OOO#OOO# #Y#           ",
+"    #OY##GOOOGOOO##OY#          ",
+"     #OO#GOOGGOOGGOO#           ",
+"     #GOOGGOOGGOOGGO#           ",
+"      #GGOGGrrGGrrSS#           ",
+"      #GGOGrrSSSSSSS#           ",
+"      #GrGGrSSSSSSSSS#          ",
+"      #GrGGrSSSS#SSSS#          ",
+"      #GrGGrsSSSSSSSS#          ",
+"      #GrGGrrsSSSSSr#           ",
+"      #GrGGr##sssss#            ",
+"      #rGGr#sSSSS#              ",
+"      #rGr#rrrrrrr#             ",
+"       #r#rrrrrrrrr#            ",
+"        #Drrrrrrrrr#            ",
+"        #DrrrYrrrrr#            ",
+"        #DrrrrYYYYY#            ",
+"        #DDrrrrrrrr#            ",
+"        #DDrrrrrrrr#            ",
+"        #DDrrrrrrr#             ",
+"       #DDDrrrrrrr#             ",
+"       #DDDrrrrrrrr#            ",
+"      #DDDrrrrrrrrr#            ",
+"      #DDDDrrrrrrrrr#           ",
+"      #kkkkkkkkkkkkk#           ",
+"       #############            ",
+]
+_LS, _LN = mirror_rows(LINA_S_HALF), mirror_rows(LINA_N_HALF)
+def fire_in(rows, x, y, big=False):
+    """a fireball held in the hand: yellow-white core, orange, then red licks"""
+    pts = [(x, y, "V"), (x - 1, y, "Y"), (x + 1, y, "Y"), (x, y - 1, "Y"), (x, y + 1, "O"), (x - 1, y - 1, "O"),
+           (x + 1, y - 1, "O"), (x, y - 2, "G"), (x - 1, y + 1, "G"), (x + 1, y + 1, "G")]
+    if big:
+        pts += [(x - 2, y, "O"), (x + 2, y, "O"), (x, y + 2, "G"), (x - 2, y - 1, "G"), (x + 2, y - 1, "G"), (x - 1, y - 2, "O"),
+                (x + 1, y - 2, "O"), (x, y - 3, "Y"), (x - 2, y + 1, "r"), (x + 2, y + 1, "r"), (x - 1, y - 3, "G"), (x + 1, y - 3, "G")]
+    r = pad_rows(rows)
+    own = {(a, b) for a, b, _ in pts}
+    for a, b, _ in pts:
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            X, Y = a + dx, b + dy
+            if 0 <= X < 32 and 0 <= Y < 32 and (X, Y) not in own and r[Y][X] == " ":
+                r[Y][X] = "#"
+    for a, b, c in pts:
+        if 0 <= a < 32 and 0 <= b < 32:
+            r[b][a] = c
+    return ["".join(q) for q in r]
+def drop_arm(rows, x0, x1):
+    """clear the hanging arm (columns x0..x1, rows 15-22) when that hand is raised"""
+    return overlay(rows, [(x, y, " ") for x in range(x0, x1 + 1) for y in range(15, 23)])
+LINA_POSES = (
+    fire_in(_LS, 26, 20),                                               # a flame cupped in the hand
+    fire_in(_LN, 5, 20),
+    fire_in(limb(LINA_E, [(10, 15), (11, 19), (14, 21)]), 16, 21),
+    fire_in(limb(drop_arm(_LS, 24, 26), [(23, 15), (26, 11), (27, 7)]), 27, 4, True),     # arm thrown up, the fireball flaring
+    fire_in(limb(drop_arm(_LN, 5, 7), [(8, 15), (5, 11), (4, 7)]), 4, 4, True),
+    fire_in(limb(LINA_E, [(10, 15), (15, 15), (20, 14)]), 24, 14, True),
+)
+
+
+def lina_frame(d, f, sh=True):
+    return ascii_frame(LINA_POSES, LINA_COLS, d, f, sh, 10)
+
+
+# Crystal Maiden: a pale blue hooded cloak with white fur trim over a white gown, an ice-crystal staff
+CM_COLS = {"#": 1, "S": 6, "s": 7, "k": 14, "8": 8, "H": 3, "h": 2, "V": 5, "W": 4, "t": 7, "Y": 15}
+CM_S_HALF = [
+"                ",
+"           #####",
+"         ##88888",
+"        #888888V",
+"       #88VVVVVV",
+"       #8V#YYYYY",
+"      #88V#SSSSS",
+"      #88V#S#SSS",
+"      #88V#sSSSS",
+"      #88V##sSSs",
+"      #888V##sss",
+"     #888VVVVVVV",
+"    #8888VVWVVWV",
+"   #88888#VVVVVV",
+"   #8888H#VVVVVW",
+"   #888HH#WVVVVV",
+"   #888HH#WVVVVV",
+"   #88HHH#WVVVVV",
+"   #SS#HH#WWVVVV",
+"   #ss#HH#WWVVVV",
+"    ##HHH#WWVVVV",
+"     #8HH#WWWVVV",
+"     #88H#WWWVVV",
+"    #888H#WWWWVV",
+"    #888HH#WWWVV",
+"   #8888HH#WWWWV",
+"   #888HHH#WWWWV",
+"   #VVVVVVVVVVVV",
+"    ############",
+]
+CM_N_HALF = [
+"                ",
+"           #####",
+"         ##88888",
+"        #8888888",
+"       #88888888",
+"       #88888888",
+"      #888888888",
+"      #888888888",
+"      #888888888",
+"      #888888888",
+"      #888888888",
+"     #888VVVVVVV",
+"    #8888VVWVVWV",
+"   #88888#888888",
+"   #8888H#888888",
+"   #888HH#888888",
+"   #888HH#H88888",
+"   #88HHH#H88888",
+"   #SS#HH#HH8888",
+"   #ss#HH#HH8888",
+"    ##HHH#HH8888",
+"     #8HH#HHH888",
+"     #88H#HHH888",
+"    #888H#HHHH88",
+"    #888HH#HHH88",
+"   #8888HH#HHHH8",
+"   #888HHH#HHHH8",
+"   #VVVVVVVVVVVV",
+"    ############",
+]
+CM_E = [
+"                                ",
+"           ######               ",
+"         ##888888##             ",
+"        #888888888V#            ",
+"       #88888888VVV#            ",
+"       #8888888VYYY#            ",
+"      #88888888VSSSS#           ",
+"      #8888888VSS#SS#           ",
+"      #8888888VSSSSSS#          ",
+"      #8888888VsSSSS#           ",
+"      #88888888VVsss#           ",
+"     #888888VVVVVVV#            ",
+"    #8888888VVVWVV#             ",
+"    #888888H#VVVVV#             ",
+"   #888888HH#VVVVW#             ",
+"   #888888HH#WVVVVV#            ",
+"   #88888HHH#WVVVVV#            ",
+"   #88888HHH#WVVVVV#            ",
+"   #8888HHHH#WWVVVV#            ",
+"   #8888HHHH#WWVVVVV#           ",
+"   #8888HHH#WWWVVVVV#           ",
+"    #888HHH#WWWVVVVV#           ",
+"    #888HHH#WWWWVVVV#           ",
+"    #888HHH#WWWWVVVVV#          ",
+"   #8888HHH#WWWWWVVVV#          ",
+"   #8888HHH#WWWWWVVVVV#         ",
+"   #888HHHH#WWWWWVVVVV#         ",
+"   #VVVVVVVVVVVVVVVVVVV#        ",
+"    ###################         ",
+]
+_CS, _CN = mirror_rows(CM_S_HALF), mirror_rows(CM_N_HALF)
+def ice_staff(rows, x0, y0, x1, y1, glow=False):
+    """a wooden staff from the fist to (x1, y1), topped with an ice crystal"""
+    r = katana(rows, x0, y0, x1, y1, 0, "ttt")
+    pts = [(x1, y1, "V"), (x1, y1 - 1, "8"), (x1, y1 - 2, "V"), (x1 - 1, y1 - 1, "8"), (x1 + 1, y1 - 1, "8"), (x1, y1 - 3, "8")]
+    if glow:
+        pts += [(x1 - 2, y1 - 1, "V"), (x1 + 2, y1 - 1, "V"), (x1, y1 - 4, "V"), (x1 - 2, y1 - 3, "8"), (x1 + 2, y1 - 3, "8"),
+                (x1 - 2, y1 + 1, "8"), (x1 + 2, y1 + 1, "8")]
+    r = pad_rows(r)
+    own = {(a, b) for a, b, _ in pts}
+    for a, b, _ in pts:
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            X, Y = a + dx, b + dy
+            if 0 <= X < 32 and 0 <= Y < 32 and (X, Y) not in own and r[Y][X] == " ":
+                r[Y][X] = "#"
+    for a, b, c in pts:
+        if 0 <= a < 32 and 0 <= b < 32:
+            r[b][a] = c
+    return ["".join(q) for q in r]
+CM_POSES = (
+    ice_staff(_CS, 4, 26, 4, 5),                                          # the staff planted at her side
+    ice_staff(_CN, 27, 26, 27, 5),
+    ice_staff(limb(CM_E, [(10, 14), (13, 18), (16, 19)], ("8", "H"), (1, "S")), 18, 26, 18, 5),
+    ice_staff(_CS, 4, 22, 7, 2, True),                                    # staff raised, the crystal flaring
+    ice_staff(_CN, 27, 22, 24, 2, True),
+    ice_staff(limb(CM_E, [(10, 14), (15, 14), (19, 13)], ("8", "H"), (1, "S")), 20, 18, 27, 7, True),
+)
+
+
+def cm_frame(d, f, sh=True):
+    return ascii_frame(CM_POSES, CM_COLS, d, f, sh, 10)
+
+
+# Drow Ranger: blue skin, white hair under a dark hood and cloak, a silver breastplate, a recurve bow
+DROW_COLS = {"#": 1, "S": 8, "s": 3, "V": 5, "W": 4, "H": 3, "h": 2, "t": 7, "k": 14, "G": 10, "g": 9, "L": 11, "Y": 15}
+DROW_S_HALF = [
+"                ",
+"                ",
+"           #####",
+"         ##hhhhh",
+"        #hhHHHHH",
+"       #hhHVVVVV",
+"       #hHVSSSSS",
+"      #hhVSS#SSS",
+"      #hhVSS#SSS",
+"      #hhVsSSSSS",
+"      #hhVVsSSss",
+"      #hhVVV##ss",
+"     #hhHVVVV#ss",
+"    #hhHH#VVV#hH",
+"    #hHHH#VhWWVW",
+"    #hHHH#hWVWWW",
+"    #hHHH#hHWWWH",
+"    #hHHh#hhHHHH",
+"    #SS#h#hhkkYk",
+"    #Ss#h#hgGGGG",
+"     ##hh#hgGgGG",
+"      #hh#hgGGGg",
+"      #hh#hSSSSg",
+"      #hH##SSss#",
+"      #hH# #SSs#",
+"      #hh# #SSs#",
+"      #hh# #hhh#",
+"       ##  #kkk#",
+"            ### ",
+]
+DROW_N_HALF = [
+"                ",
+"                ",
+"           #####",
+"         ##hhhhh",
+"        #hhHHHHH",
+"       #hhHHHHHH",
+"       #hHHHHHHH",
+"      #hhHHHHHHh",
+"      #hhHHHHHhh",
+"      #hhHHHHhhV",
+"      #hhHHHhhVV",
+"      #hhHHVVVVW",
+"     #hhHVVVVVVV",
+"    #hhHH#VVVWVk",
+"    #hHHH#hVWVkt",
+"    #hHHH#hWVktk",
+"    #hHHH#hhktkt",
+"    #hHHh#hhkttt",
+"    #SS#h#hhkkYk",
+"    #Ss#h#hgGGGG",
+"     ##hh#hgGgGG",
+"      #hh#hgGGGg",
+"      #hh#hSSSSg",
+"      #hH##SSss#",
+"      #hH# #SSs#",
+"      #hh# #SSs#",
+"      #hh# #hhh#",
+"       ##  #kkk#",
+"            ### ",
+]
+DROW_E = [
+"                                ",
+"                                ",
+"           ######               ",
+"         ##hhhhhh##             ",
+"        #hhHHHHHHHh#            ",
+"       #hhHHHHHVVVV#            ",
+"       #hHHHHHVVSSSS#           ",
+"      #hhHHHHVVSS#SS#           ",
+"      #hhHHHHVVSSSSSS#          ",
+"      #hhHHHHVVsSSSS#           ",
+"      #hhHHHVVVVsss#            ",
+"      #hhHHVVVVVV#              ",
+"    #thhHHVVVVhWW#              ",
+"   #tkhhHHHVVhWWW#              ",
+"   #tkhhHHHHhWWWVW#             ",
+"   #tkhhHHHHhWVWWW#             ",
+"    #khhHHHHhHWWWH#             ",
+"    #hhhHHHhhHHHH#              ",
+"    #hhhHHHhhHHHH#              ",
+"    #hhhHHhhkkYkk#              ",
+"    #hhhHHhhgGGGG#              ",
+"     #hhHHhhgGGGG#              ",
+"     #hhHhhSSSgGG#              ",
+"     #hhHhhSSSsgG#              ",
+"     #hhHhSSs#SSs#              ",
+"      #hhhSSs#SSs#              ",
+"      #hhhhhh#hhhh#             ",
+"       #kkkk# #kkkk#            ",
+"        ####   ####             ",
+]
+_DS, _DN = mirror_rows(DROW_S_HALF), mirror_rows(DROW_N_HALF)
+def drow_bow(rows, c, a0, a1, side=1, pull=0, arrow=False, horiz=False):
+    """a recurve bow along the axis from a0 to a1 at cross position c (x for an upright bow, y for one
+    held across), its limb bowing out to side; the string is drawn back by pull, an arrow nocked"""
+    pts = []
+    n = a1 - a0
+    m = n // 2
+    for i in range(n + 1):
+        t = i / n
+        pts.append((c + side * round(2.4 * (1 - (2 * t - 1) ** 2)), a0 + i, "t"))
+        if 0 < i < n:
+            k = round(pull * (1 - abs(i - m) / m))
+            pts.append((c - side * k, a0 + i, "W"))
+    if arrow:
+        pts += [(c - side * pull + side * k, a0 + m, "W" if k < 7 else "V") for k in range(9)]
+    if horiz:
+        pts = [(q, p, ch) for p, q, ch in pts]
+    r = pad_rows(rows)
+    own = {(x, y) for x, y, _ in pts}
+    for x, y, _ in pts:
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            X, Y = x + dx, y + dy
+            if 0 <= X < 32 and 0 <= Y < 32 and (X, Y) not in own and r[Y][X] == " ":
+                r[Y][X] = "#"
+    for x, y, ch in pts:
+        if 0 <= x < 32 and 0 <= y < 32:
+            r[y][x] = ch
+    return ["".join(q) for q in r]
+DROW_POSES = (
+    drow_bow(_DS, 25, 11, 27),                                          # bow held at her side
+    drow_bow(_DN, 6, 11, 27, -1),
+    drow_bow(limb(DROW_E, [(10, 14), (13, 18), (16, 19)], ("h", "H"), (1, "S")), 18, 10, 27),
+    drow_bow(_DS, 21, 8, 24, 1, 3, True, True),                         # held across, drawn, loosing at us
+    drow_bow(_DN, 9, 8, 24, -1, 3, True, True),
+    drow_bow(limb(DROW_E, [(10, 14), (15, 15), (19, 15)], ("h", "H"), (1, "S")), 22, 7, 23, 1, 4, True),
+)
+
+
+def drow_frame(d, f, sh=True):
+    return ascii_frame(DROW_POSES, DROW_COLS, d, f, sh, 10)
 
 
 def melee_frame(d, f):
@@ -1861,7 +2262,7 @@ def lane_dist(x, y):
     return best
 
 
-TOWERS_RAD = [(104, 400), (104, 640), (400, 624), (296, 728), (624, 920), (384, 920)]
+TOWERS_RAD = [(104, 336), (104, 640), (432, 592), (296, 728), (688, 920), (384, 920)]
 ANCIENT_RAD = (176, 848)
 FOUNTAIN_RAD = (64, 960)
 
@@ -2285,7 +2686,7 @@ logo_map = add_map(logo)
 sprite_tiles = len(tiles)
 
 # heroes live in ROM only: the game copies the four in play into VRAM slots after GFX_TILES
-HERO_FNS = [sf_frame, pudge_frame, axe32, sniper32, zeus32, lina32, cm32, drow32, viper_frame, jugg_frame]
+HERO_FNS = [sf_frame, pudge_frame, axe_frame, sniper_frame, zeus_frame, lina_frame, cm_frame, drow_frame, viper_frame, jugg_frame]
 PORT_ORG = {pudge_frame: (4, 2), sf_frame: (4, 2), viper_frame: (4, 7)}   # where each 24x24 HUD portrait is cut
 
 
