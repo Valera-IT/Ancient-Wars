@@ -266,7 +266,7 @@ PAL_MAP = [(0, 0, 0), (0, 0, 0), (0, 3, 1), (1, 4, 1), (2, 5, 1), (0, 2, 1), (3,
 PAL_UI = [(0, 0, 0), (0, 0, 0), (7, 7, 7), (5, 7, 7), (3, 6, 7), (2, 4, 7), (7, 7, 2), (7, 4, 0),
           (7, 1, 1), (1, 6, 1), (0, 3, 0), (2, 4, 7), (0, 1, 3), (0, 0, 0), (7, 6, 1), (3, 3, 4)]   # 13: the black HUD
 UNIT_COMMON = {0: (0, 0, 0), 1: (0, 0, 0), 2: (2, 2, 2), 3: (4, 4, 4), 4: (6, 6, 6), 5: (7, 7, 7),
-               6: (7, 6, 5), 7: (6, 4, 3), 8: (3, 5, 7), 12: (7, 1, 0), 13: (2, 0, 2), 14: (4, 1, 4),
+               6: (7, 6, 5), 7: (6, 4, 3), 8: (3, 5, 7), 12: (7, 1, 0), 13: (2, 0, 0), 14: (4, 1, 1),
                15: (7, 6, 2)}
 PAL_RAD = [UNIT_COMMON.get(i) or {9: (0, 3, 1), 10: (1, 5, 2), 11: (4, 7, 3)}[i] for i in range(16)]
 PAL_DIRE = [UNIT_COMMON.get(i) or {9: (3, 0, 0), 10: (6, 1, 0), 11: (7, 4, 2)}[i] for i in range(16)]
@@ -391,70 +391,177 @@ def flesh(b, cx, cy, r, rx=None, ry=None):
                     b[y][x] = 5
 
 
-PUDGE_FRONT = [                    # traced from the reference: one squat hunched mass, the wide
-    "                        ",       # flat head sunk on top, arms spread, the hook held out up-right
+PUDGE_S = [   # top-down, from the Dota/Genesis reference sheet: green crest, huge pink gut,
     "                        ",
-    "                       5",
-    "      ##########     #4#",
-    "     #SSSSSSSSSS#    #3 ",
-    "    #SSS#SSSS##SS#   3  ",
-    "   #sSSSSSsddsSSSs# 3   ",
-    "  #s##SSSSSSSSSSs#####  ",
-    " #SS#sSSSSSSSSSSSs#SSs# ",
-    " #S#S#SSSSSdSSSSSSSSSs# ",
-    "#SSSs#SSSSSdSSSSSs#sss# ",
-    "#S#S#sSSSSSdsSSSSs####  ",
-    "#ss#ssSSSSsdssSSs#      ",
-    " ###sssSSSsdsssSss#     ",
-    "    #ssssssdsssss#      ",
-    "    ##dddddddddd##      ",
-    "     #BBBBbbBBBBb#      ",
-    "     #BBbBBBBbBBb#      ",
-    "     #bBBb#bBBbb#       ",
-    "      #bb# #bbb#        ",
-    "   1 1 ### 1###1 1      ",
-    "    1 1 1 1 1 1 1 1     ",
-    "     1 1 1 1 1 1 1      ",
+    "                        ",
+    "          ####          ",
+    "         #GGGG#         ",
+    "        #sgGGgs#        ",
+    "     ####sSggSs####     ",
+    "    #kss#y#ss#y#ssk#    ",
+    "   #kssSk#sDDs#kSssk#   ",
+    "  #kDsSSSk#WW#kSSSsDk#  ",
+    "  #kDssSSSskksSSSssDk#  ",
+    " #hhDksSSSSSSSSSSskDhh# ",
+    " #hhkksSSSSSSSSSSskkhh# ",
+    " #kskkssswwwwwwssskksk# ",
+    " #kSsk#wwWWrrWWww#ksSk# ",
+    " #DsSk#wWWWrrWWWw#kSsD# ",
+    "#HDkk##wWWrrrrWWw##kkDH#",
+    "#H#Dk#wwWrrWWrrWww#kD#H#",
+    "#H# #  #wwwrwwww#  # #H#",
+    " #H#    #gggggg#    #H# ",
+    "  #r     ######     r#  ",
+    "   r                r   ",
+    "                        ",
+    "                        ",
     "                        ",
 ]
-PUDGE_LEGS = ["     #BBbBBBBbBBb#      ", "     #bBBbb#bBBb#       ", "      #bbb# #bb#        ",
-              "   1 1 ### 1###1 1      "]
-PUDGE_THROW = {                    # the attack: the hook arm flung straight up, chain taut
-    0: "                   #4#  ",
-    1: "                   #3#  ",
-    2: "                   #3#  ",
-    3: "      ##########  #Ss#  ",
-    4: "     #SSSSSSSSSS##SSs#  ",
-    5: "    #SSS#SSSS##SS#Ss#   ",
-    6: "   #sSSSSSsddsSSSSSs#   ",
-    7: "  #s##SSSSSSSSSSsSSs#   ",
-    8: " #SS#sSSSSSSSSSSSss#    ",
-    9: " #S#S#SSSSSdSSSSSss#    ",
-    10: "#SSSs#SSSSSdSSSSSs#     ",
-    11: "#S#S#sSSSSSdsSSSSs#     ",
-}
-PUDGE_COLS = {"#": 1, "1": 1, "S": 6, "s": 7, "d": 13, "B": 8, "b": 13, "3": 3, "4": 4, "5": 5}
+PUDGE_N = [   # bloody apron, hooks in both fists; S = towards the camera, N = back, E = side
+    "                        ",
+    "                        ",
+    "          ####          ",
+    "         #GGGG#         ",
+    "        #sGggGs#        ",
+    "     ####sGggGs####     ",
+    "    #kss#ssGGss#ssk#    ",
+    "   #kssSksssssskSssk#   ",
+    "  #kDsSSSksssskrSSsDk#  ",
+    "  #kDssSSrssssDSSssDk#  ",
+    " #hhDksSSsDssDsSSskDhh# ",
+    " #hhkksSSSsDDsrSSskkhh# ",
+    " #kskksSSSskksSSSskksk# ",
+    " #kSsk#srSssssSSs#ksSk# ",
+    " #DsSk#ksSssssSsr#kSsD# ",
+    "#HDkk##DkkkkkkkkD##kkDH#",
+    "#H#Dk#wDggggggggDw#kD#H#",
+    "#H# #  #gggggggg#  # #H#",
+    " #H#    #gggggg#    #H# ",
+    "  #r     ######     r#  ",
+    "   r                r   ",
+    "                        ",
+    "                        ",
+    "                        ",
+]
+PUDGE_E = [   # facing right; the game mirrors it for west
+    "                        ",
+    "                        ",
+    "             ##         ",
+    "           ##GG#        ",
+    "         ##sgGGs#       ",
+    "       ##ksgGsSs#       ",
+    "      #kkssss#ys#       ",
+    "     #kkssSSsssDD#      ",
+    "    #kkssSSSSSsW#       ",
+    "    #kDssSSSSSSs#       ",
+    "   #kDkssSSSSSSSs#      ",
+    "   #hhkssSSSSSSSs#      ",
+    "   #hhkkssswwwwSSs#     ",
+    "   #kkkk#swwrWWwss#     ",
+    "   #Dkk#hhwWrrWWwk#     ",
+    "   #Dkk#hhwWrrWWw#      ",
+    "    #Dk#kSkrwwrww#      ",
+    "     ##HDk#ggggg#       ",
+    "      #H##  #ggg#       ",
+    "      #H#    ###        ",
+    "       #HHr             ",
+    "        ##r             ",
+    "                        ",
+    "                        ",
+]
+PUDGE_SA = [   # attack: the hook arm swung overhead
+    "                   #H#  ",
+    "                  #HWH# ",
+    "          ##     #Hk#   ",
+    "         #GG#   #kk#    ",
+    "        #sgGs# #ksk#    ",
+    "     ####sSgS##ksk#     ",
+    "    #kss#y#ss#y#sk#     ",
+    "   #kssSk#sDDs#kSs#     ",
+    "  #kDsSSSk#WW#kSSSs#    ",
+    "  #kDssSSSskkssSSSsk#   ",
+    " #hhDksSSSSSSSSSSskk#   ",
+    " #hhkksSSSSSSSSSSsskk#  ",
+    " #kskkssswwwwwwssskksk# ",
+    " #kSsk#wwWWrrWWww#ksSk# ",
+    " #DsSk#wWWWrrWWWw#kSsD# ",
+    "#HDkk##wWWrrrrWWw##kk#  ",
+    "#H#Dk#wwWrrWWrrWw#kD#   ",
+    "#H# #  #wwwrwwww#       ",
+    " #H#    #gggggg#        ",
+    "  #r     ######         ",
+    "   r                r   ",
+    "                        ",
+    "                        ",
+    "                        ",
+]
+PUDGE_NA = [   # attack from behind
+    "                   #H#  ",
+    "                  #HWH# ",
+    "          ####   #Hk#   ",
+    "         #GGGG#  kk#    ",
+    "        #sGggGs#  k#    ",
+    "     ####sGggGs##k#     ",
+    "    #kss#ssGGss#sk##    ",
+    "   #kssSksssssskSs#k#   ",
+    "  #kDsSSSksssskrSSs#k#  ",
+    "  #kDssSSrssssDSSssk##  ",
+    " #hhDksSSsDssDsSSskk#h# ",
+    " #hhkksSSSsDDsrSSskkk## ",
+    " #kskksSSSskksSSSskksk# ",
+    " #kSsk#srSssssSSs#ksSk# ",
+    " #DsSk#ksSssssSsr#kSsD# ",
+    "#HDkk##DkkkkkkkkD##kk#  ",
+    "#H#Dk#wDggggggggD#kD#   ",
+    "#H# #  #gggggggg#       ",
+    " #H#    #gggggg#        ",
+    "  #r     ######         ",
+    "   r                r   ",
+    "                        ",
+    "                        ",
+    "                        ",
+]
+PUDGE_EA = [   # attack to the side: the hook thrust forward
+    "                        ",
+    "                        ",
+    "             ##         ",
+    "           ##GG#        ",
+    "         ##sgGGs#       ",
+    "       ##ksgGsSs#       ",
+    "      #kkssss#ys#       ",
+    "     #kkssSSsssDD#      ",
+    "    #kkssSSSSSsW#       ",
+    "    #kDssSSSSSSs#       ",
+    "   #kDkssSSSSSSSs#      ",
+    "   #hhkssSSSSSSSs#kk#  #",
+    "   #hhkkssswwwwSs#kSk##H",
+    "   #kkkk#swwrWWws#kk#HHW",
+    "   #Dkk#hhwWrrWWwk##  #H",
+    "   #Dkk#hhwWrrWWw#      ",
+    "    #Dk#kSkrwwrww#      ",
+    "     ##HDk#ggggg#       ",
+    "      #H##  #ggg#       ",
+    "      #H#    ###        ",
+    "       #HHr             ",
+    "        ##r             ",
+    "                        ",
+    "                        ",
+]
+PUDGE_COLS = {"#": 1, "S": 6, "s": 7, "k": 14, "D": 13, "G": 10, "g": 9, "W": 5, "w": 4, "r": 12,
+              "H": 3, "h": 2, "y": 15}
 
 
 def pudge_frame(d, f):
-    """The Butcher, traced from the Dota pixel-art reference: a squat pale gut with the wide flat
-    head sunk on top, arms spread, blue trousers, the chained hook held out up-right; the attack
-    frame flings the hook arm straight up. The back view has no face or belly line; the side
-    view shares the front art (the game mirrors it)."""
-    rows = list(PUDGE_FRONT)
-    if f == 1:
-        rows[17:21] = PUDGE_LEGS
-    elif f == 2:
-        for y, r in PUDGE_THROW.items():
-            rows[y] = r
-    if d == 1:                                                      # from behind
-        rows = [r[:6] + r[6:17].replace("d", "s") + r[17:] if 5 <= y <= 14 else r for y, r in enumerate(rows)]
-        rows[5] = rows[5][:5] + "SSSSSSSSSSSS" + rows[5][17:]
+    """The Butcher seen from above, after the Dota 2 / Genesis top-down reference sheet. The green
+    crest and trousers are team colour 9-10; the walk step bobs the body a pixel."""
+    rows = ((PUDGE_S, PUDGE_N, PUDGE_E) if f < 2 else (PUDGE_SA, PUDGE_NA, PUDGE_EA))[d]
     b = bmp(24, 24)
+    shadow(b, 12, 21, 9, 3)
+    dy = 1 if f == 1 else 0
     for y, r in enumerate(rows):
         for x, ch in enumerate(r):
-            if ch != " ":
-                b[y][x] = PUDGE_COLS[ch]
+            if ch != " " and y + dy < 24:
+                b[y + dy][x] = PUDGE_COLS[ch]
     return b
 
 
