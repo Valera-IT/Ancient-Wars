@@ -1000,7 +1000,7 @@ def axe32(d, f):
 
 
 # ---- Sniper (keen: short, big helmet, long rifle)
-SN_SKIN = [14, 7, 6]
+SN_SKIN = [7, 6, 6]
 def sniper32(d, f):
     b = bmp(32, 32)
     hx = 17 if d == 2 else 16
@@ -1044,7 +1044,7 @@ def sniper32(d, f):
 
 
 # ---- Zeus (white robe, white beard, lightning)
-ZEUS_SKIN = [14, 7, 6]
+ZEUS_SKIN = [7, 6, 6]
 def zeus32(d, f):
     b = bmp(32, 32)
     hx = 17 if d == 2 else 16
@@ -1072,6 +1072,10 @@ def zeus32(d, f):
         rect(b, hx - 3 + bx, 11, hx + 3, 16, 5)          # long beard
         rect(b, hx - 2 + bx, 17, hx + 2, 18, 4)
         put(b, hx + bx, 19, 4)
+        for x in ((hx - 2, hx + 1) if d == 0 else (hx + 2,)):    # eyes under bushy white brows
+            put(b, x, 10, 1)
+            put(b, x, 9, 4)
+            put(b, x + 1 if x > hx else x - 1, 9, 4)
     if f == 2:                                           # arm thrown out with a bolt
         if d == 0:
             line(b, 21, 15, 23, 21, 4, 2)
@@ -1091,7 +1095,7 @@ def zeus32(d, f):
 
 
 # ---- Lina (palette line 3: flame hair, red dress)
-LINA_SKIN = [14, 7, 6]
+LINA_SKIN = [7, 6, 6]
 def lina32(d, f):
     b = bmp(32, 32)
     hx = 17 if d == 2 else 16
@@ -1239,7 +1243,7 @@ def drow32(d, f):
 
 
 # ---- Juggernaut (tiki mask, red crest, bare chest, katana)
-JUGG_SKIN = [14, 7, 6]
+JUGG_SKIN = [7, 6, 6]
 def jugg32(d, f):
     b = bmp(32, 32)
     hx = 17 if d == 2 else 16
@@ -1254,7 +1258,7 @@ def jugg32(d, f):
             line(b, 23, 21, 29, 9, 5)                    # katana held low
             line(b, 22, 22, 23, 21, 15)
     # mask: a tall orange tiki mask covering the head
-    shade_sphere(b, hx, 8.5, 5.5, [14, 7, 15], rx=5, ry=6)
+    shade_sphere(b, hx, 8.5, 5.5, [7, 7, 15], rx=5, ry=6)
     rect(b, hx - 1, 0, hx + 1, 3, 12)                    # red crest
     put(b, hx, 0, 14)
     if d == 0:
