@@ -2,3 +2,4 @@ build/
 src/gfx.h
 src/music.h
 .DS_Store
+recordings/
