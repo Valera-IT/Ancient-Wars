@@ -683,6 +683,8 @@ static const u8 st_dml[NHERO] = { 3, 4, 4, 4, 3, 3, 3, 4, 3, 4 };
 static const u8 st_rng[NHERO] = { 80, 20, 20, 96, 72, 76, 70, 90, 80, 20 };
 static const u8 st_spd[NHERO] = { 21, 19, 22, 20, 20, 21, 19, 21, 21, 23 };
 static const u8 st_rate[NHERO] = { 50, 56, 54, 52, 56, 54, 58, 52, 52, 50 };
+/* the palette line each hero is drawn in: Radiant's (green 9-11) or Dire's (orange-red 9-11) */
+static const u8 hero_pal[NHERO] = { 2, 2, 3, 2, 2, 3, 2, 2, 2, 2 };
 static const u8 st_pj[NHERO] = { PJ_SF, 0, 0, PJ_BULLET, PJ_ICE, PJ_FIRE, PJ_ICE, PJ_ICE, PJ_POISON, 0 };
 
 /* table-driven skills. cd is in units of 16 frames; dmg = base + per * level; for SK_LINE range is
@@ -2415,7 +2417,7 @@ static void split_hud(u8 part, u8 only)
         if (part == 0) {                /* portrait, level, HP and mana */
             u16 tp = k ? T_PORT2 : T_PORT;
             for (y = 0; y < 3; y++)
-                for (x = 0; x < 3; x++) wtile(xo + x, 24 + y, ATTR(2, 1, tp + times(3, x) + y));
+                for (x = 0; x < 3; x++) wtile(xo + x, 24 + y, ATTR(hero_pal[hk[k]], 1, tp + times(3, x) + y));
             if (U->on) { b[0] = 'L'; num(H->lvl, 2, b + 1); }
             else { b[0] = 'R'; num(divs(H->respawn + 59, 60), 2, b + 1); }
             textW(xo, 27, b);
@@ -2595,7 +2597,7 @@ static void hud_static(void)
     if (split) { hud_art(0, T_SKI, T_PORT); hud_art(1, T_SKI2, T_PORT2); return; }
     hud_art(view, T_SKI, T_PORT);
     for (y = 0; y < 3; y++)
-        for (x = 0; x < 3; x++) wtile(5 + x, 24 + y, ATTR(2, 1, T_PORT + times(3, x) + y));
+        for (x = 0; x < 3; x++) wtile(5 + x, 24 + y, ATTR(hero_pal[hk[view]], 1, T_PORT + times(3, x) + y));
     for (y = 0; y < 3; y++) wtile(11, 24 + y, ATTR(1, 1, T_HICON + y));
     for (y = HUD_Y; y < 28; y++) { wtile(19, y, ATTR(1, 1, T_FRAME + 1)); wtile(31, y, ATTR(1, 1, T_FRAME + 1)); }
     panelA(14, 26, 0, 1);
@@ -2760,9 +2762,9 @@ static void draw_scene(void)
         sd = sdir_of[v->face & 7];
         fl = (v->face >= 3 && v->face <= 5) ? HFLIP : 0;
         switch (v->type) {
-        case U_HERO: {           /* heroes keep their own colours on either side: line 2 */
+        case U_HERO: {           /* heroes keep their own colours on either side */
             Hero *H = &hr[i];
-            pal = 2;
+            pal = hero_pal[hk[i]];
             u8 f = (v->wind || H->chan_t || H->cast_lock || H->hook_st == 1) ? 2 : ((v->anim >> 3) & 1);
             if (v->stun && (vcount & 4)) break;
             if (v->hunger && (vcount & 8)) pal ^= 1;
@@ -3229,7 +3231,7 @@ static u8 draft(void)
             char tag[6];
             for (m = 0; m < at; m++)
                 if (*slot[m] == k) tag[tx++] = "PEAEAE"[m];
-            spr(gx - 4, gy - 6, 0x0F, ATTR(2, 0, T_DHERO(k) + (k == cur && (t & 32) ? 16 : 0)));
+            spr(gx - 4, gy - 6, 0x0F, ATTR(hero_pal[k], 0, T_DHERO(k) + (k == cur && (t & 32) ? 16 : 0)));
             for (m = 0; m < tx; m++)
                 spr(gx + 12 - (tx << 2) + (m << 3), gy + 25, 0, ATTR(1, 1, T_FONT + (tag[m] - 32)));
             if (k == cur && (t & 16)) {

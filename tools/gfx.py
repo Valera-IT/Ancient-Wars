@@ -774,7 +774,7 @@ PUDGE_COLS = {"#": 1, "S": 6, "s": 7, "k": 14, "D": 13, "G": 10, "g": 9, "W": 5,
 
 def pudge_frame(d, f, sh=True):
     """The Butcher seen from above, after the Dota 2 / Genesis top-down reference sheet. The green
-    crest and trousers are team colour 9-10; the walk step bobs the body a pixel."""
+    crest and trousers are colours 9-10; the walk step bobs the body a pixel."""
     rows = ((PUDGE_S, PUDGE_N, PUDGE_E) if f < 2 else (PUDGE_SA, PUDGE_NA, PUDGE_EA))[d]
     b = bmp(32, 32)
     if sh:
@@ -867,238 +867,427 @@ def viper_frame(d, f, sh=True, span=1.0):
     return o
 
 
-def axe_frame(d, f):
-    """Axe: red-skinned, black topknot, grey armour, a huge double-bladed axe."""
-    b = bmp(24, 24)
-    shadow(b, 12, 21, 8, 3)
-    sx = 2 if d == 2 else 0
-    legs(b, d, f, 12, 17, 3, 1)
-    shade_sphere(b, 12, 12, 6, [12, 12, 12], rx=6.5, ry=5.5)
-    if d != 1:
-        rect(b, 9, 11, 15, 14, 3)                       # chest plate
-        rect(b, 10, 12, 14, 13, 4)
-    else:
-        line(b, 8, 9, 16, 15, 3)                         # harness
-    rect(b, 7, 15, 17, 16, 9)                            # team-coloured belt
-    put(b, 8, 15, 11)
-    rect(b, 6, 9, 8, 11, 4)                              # pauldrons
-    rect(b, 16, 9, 18, 11, 4)
-    ell(b, 12 + sx, 6, 3.3, 3, 12)
-    rect(b, 11 + sx, 2, 13 + sx, 4, 13)                  # topknot
-    put(b, 12 + sx, 1, 13)
-    if d == 0:
-        put(b, 11, 6, 15)
-        put(b, 13, 6, 15)
-        line(b, 10, 8, 14, 8, 13)                        # beard
-    elif d == 2:
-        put(b, 15, 6, 15)
-        line(b, 14, 8, 16, 8, 13)
-    if f == 2:                                           # overhead chop
-        if d == 0:
-            line(b, 16, 12, 18, 20, 6, 1)
-            ell(b, 18, 21, 4, 2.5, 4)
-            line(b, 15, 21, 21, 21, 5)
-        elif d == 1:
-            line(b, 16, 11, 18, 3, 6, 1)
-            ell(b, 18, 2.5, 4, 2.5, 4)
-        else:
-            line(b, 16, 11, 22, 11, 6, 1)
-            ell(b, 21.5, 11, 2.5, 5, 4)
-            line(b, 23, 7, 23, 15, 5)
-    else:
-        sw = f
-        line(b, 6, 11, 5, 16 + sw, 12, 2)
-        line(b, 18, 11, 19, 15 - sw, 12, 2)
-        line(b, 20, 3 - sw, 20, 19 - sw, 6)              # haft
-        ell(b, 17.5, 5 - sw, 2.5, 3, 4)                  # double blade
-        ell(b, 22.5, 5 - sw, 2.5, 3, 4)
-        put(b, 16, 5 - sw, 5)
-        put(b, 23, 5 - sw, 5)
-    return add_outline(b)
+# ---- shared 32x32 body
+def robe_fill(b, y0, y1, w0, w1, shades, cx=16, trim=None):
+    """a robe from the shoulders (half width w0 at y0) to the hem (w1 at y1), lit from the left"""
+    for y in range(y0, y1 + 1):
+        w = w0 + (w1 - w0) * (y - y0) / max(1, y1 - y0)
+        for x in range(round(cx - w), round(cx + w)):
+            t = (x + 0.5 - (cx - w)) / (2 * w)
+            b[y][x] = shades[2] if t < 0.3 else (shades[1] if t < 0.78 else shades[0])
+    if trim is not None:
+        w = w1
+        for x in range(round(cx - w), round(cx + w)):
+            b[y1][x] = trim
 
 
-def humanoid(d, f, skin, body, legs_c=2, robe=False, trim=11, hair=None, style="short", beard=None,
-             weapon="hands", wcol=4, glow=5, short=False):
-    """Generic caster/fighter body for the newer heroes: robe or legs, team belt, a head with hair
-    of some style, and one weapon whose pose follows the frame (2 = attack)."""
-    b = bmp(24, 24)
-    shadow(b, 12, 21, 8, 3)
-    sx = 2 if d == 2 else 0
-    dy = 2 if short else 0                               # keen-sized: everything sits lower
-    if robe:
-        for y in range(11 + dy, 21):
-            w = 4 + (y - 11 - dy) // 3
-            for x in range(12 - w, 12 + w + 1):
-                put(b, x + (-1 if d == 2 else 0), y, body)
-        rect(b, 8, 20, 16, 20, trim)                     # hem
-        put(b, 9 + f, 21, 1)
-        put(b, 14 - f, 21, 1)
+def legs32(b, d, f, col, boot, y0=22, y1=27):
+    if d == 2:
+        for x, k in ((13, -1), (17, 1)):                 # back leg, front leg; the step swaps them
+            off = [0, -k * 2, k][f] if f != 1 else -k * 2
+            off = [k, -k, k * 2][f]
+            rect(b, x + off, y0, x + off + 2, y1 - 1, col)
+            rect(b, x + off, y1 - 1, x + off + 3, y1, boot)
     else:
-        legs(b, d, f, 12, 17, legs_c, 1)
-    ell(b, 12, 12 + dy, 5, 4.5 - dy * 0.5, body)
-    rect(b, 8, 14 + dy // 2, 16, 15 + dy // 2, 9)        # team-coloured belt
-    put(b, 8, 14 + dy // 2, 11)
-    hx, hy = 12 + sx, 7 + dy
-    if style == "hood":
-        ell(b, hx, hy, 4.2, 4, hair)
-        if d != 1:
-            ell(b, hx + (1 if d == 2 else 0), hy + 1, 2.3, 2.2, skin)
-    else:
-        ell(b, hx, hy, 3.3, 3.2, skin if d != 1 else (hair or skin))
-        if hair is not None:
-            if style == "long":
-                rect(b, hx - 4, hy - 2, hx - 3, hy + 5, hair)
-                rect(b, hx + 3, hy - 2, hx + 4, hy + 5, hair)
-                rect(b, hx - 3, hy - 4, hx + 3, hy - 2, hair)
-                if d == 1:
-                    rect(b, hx - 3, hy - 2, hx + 3, hy + 6, hair)
-                if d == 2:
-                    rect(b, hx - 4, hy - 2, hx - 1, hy + 6, hair)
-            elif style == "flame":                     # Lina: hair rising into flames
-                rect(b, hx - 3, hy - 4, hx + 3, hy - 2, hair)
-                for k in range(-3, 4, 2):
-                    put(b, hx + k, hy - 5, 12)
-                    put(b, hx + k + 1, hy - 6 + (k & 1), 12)
-                rect(b, hx - 4, hy - 2, hx - 3, hy + 3, hair)
-                rect(b, hx + 3, hy - 2, hx + 4, hy + 3, hair)
-            elif style == "helmet":
-                rect(b, hx - 3, hy - 4, hx + 3, hy - 1, hair)
-                rect(b, hx - 4, hy - 1, hx + 4, hy - 1, hair)
-                put(b, hx - 1, hy - 3, 5)
-            elif style == "mask":                      # Juggernaut: tiki mask and a red crest
-                if d != 1:
-                    ell(b, hx + (1 if d == 2 else 0), hy, 3, 3.2, 15)
-                    line(b, hx - 2 + (1 if d == 2 else 0), hy - 1, hx + 2 + (1 if d == 2 else 0), hy - 1, 12)
-                    put(b, hx - 1 + (2 if d == 2 else 0), hy, 1)
-                    if d == 0:
-                        put(b, hx + 1, hy, 1)
-                    line(b, hx - 1, hy + 2, hx + 1, hy + 2, 12)
-                rect(b, hx - 1, hy - 6, hx + 1, hy - 3, hair)
-            elif style == "horns":                     # Lion: swept back horns
-                for k in range(4):
-                    put(b, hx - 3 - k // 2, hy - 2 - k, hair)
-                    put(b, hx + 3 + k // 2, hy - 2 - k, hair)
-            else:
-                rect(b, hx - 3, hy - 4, hx + 3, hy - 2, hair)
-    if d == 0 and style != "mask":
-        put(b, hx - 1, hy, 1 if skin != 1 else 5)
-        put(b, hx + 1, hy, 1 if skin != 1 else 5)
-        if style == "horns":
-            put(b, hx - 1, hy, 12)
-            put(b, hx + 1, hy, 12)
-    elif d == 2 and style != "mask":
-        put(b, hx + 2, hy, 12 if style == "horns" else 1)
-    if beard is not None and d != 1:
-        rect(b, hx - 2 + (1 if d == 2 else 0), hy + 2, hx + 2, hy + 4, beard)
-        put(b, hx + (1 if d == 2 else 0), hy + 5, beard)
-    # arms and weapon
+        lift = [(0, 0), (2, 0), (0, 0)][f]
+        for k, x in enumerate((12, 17)):
+            rect(b, x, y0 - lift[k], x + 2, y1 - 1 - lift[k], col)
+            rect(b, x, y1 - 1 - lift[k], x + 2, y1 - lift[k], boot)
+
+
+def arms32(b, d, f, col, hand, sy=15, wide=6):
     sw = 1 if f == 1 else 0
-    arm = body if robe else skin
-    ay = 11 + dy
-    if f == 2:
-        if weapon == "staff":
-            if d == 0:
-                line(b, 16, ay, 19, 21, wcol)
-                disc(b, 19.5, 21.5, 2, glow)
-            elif d == 1:
-                line(b, 16, ay, 19, 3, wcol)
-                disc(b, 19.5, 2.5, 2, glow)
-            else:
-                line(b, 14, ay, 22, ay - 4, wcol)
-                disc(b, 21.5, ay - 4.5, 2, glow)
-            line(b, 15, ay, 17, ay + 2, arm, 2)
-        elif weapon == "gun":
-            if d == 0:
-                line(b, 12, 13 + dy, 12, 23, wcol, 2)
-                put(b, 12, 23, 15)
-            elif d == 1:
-                line(b, 12, 11, 12, 1, wcol, 2)
-                put(b, 12, 0, 15)
-            else:
-                line(b, 13, ay + 1, 23, ay + 1, wcol, 2)
-                put(b, 18, ay, 5)
-                put(b, 23, ay, 15)
-        elif weapon == "bow":
-            if d == 0:
-                line(b, 7, 19, 12, 22, wcol)
-                line(b, 12, 22, 17, 19, wcol)
-                line(b, 12, 13, 12, 21, 5)
-            elif d == 1:
-                line(b, 7, 4, 12, 1, wcol)
-                line(b, 12, 1, 17, 4, wcol)
-                line(b, 12, 10, 12, 2, 5)
-            else:
-                line(b, 20, 6, 22, 12, wcol)
-                line(b, 22, 12, 20, 18, wcol)
-                line(b, 20, 6, 20, 18, 4)
-                line(b, 14, 12, 23, 12, 5)
-        elif weapon == "sword":
-            if d == 0:
-                line(b, 14, 13, 22, 21, 5)
-                line(b, 13, 12, 15, 14, 15)
-            elif d == 1:
-                line(b, 14, 10, 22, 2, 5)
-                line(b, 13, 11, 15, 9, 15)
-            else:
-                line(b, 15, 12, 23, 8, 5)
-                put(b, 14, 12, 15)
-            line(b, 15, ay, 15, ay + 2, arm, 2)
-        else:                                          # casters: both hands forward, glowing
-            if d == 0:
-                line(b, 9, ay + 1, 10, ay + 7, arm, 2)
-                line(b, 15, ay + 1, 14, ay + 7, arm, 2)
-                disc(b, 12, 20.5, 2.6, glow)
-                put(b, 12, 20, 5)
-            elif d == 1:
-                line(b, 9, ay, 10, 4, arm, 2)
-                line(b, 15, ay, 14, 4, arm, 2)
-                disc(b, 12, 2.5, 2.6, glow)
-            else:
-                line(b, 13, ay, 19, ay, arm, 2)
-                disc(b, 21.5, ay + 0.5, 2.4, glow)
-                put(b, 21, ay, 5)
+    if d == 2:
+        line(b, 16, sy, 17 + sw, sy + 6, col, 2)
+        disc(b, 18 + sw, sy + 7.5, 1.4, hand)
     else:
-        if d == 2:
-            line(b, 13, ay + 1, 14 + sw, ay + 5, arm, 2)
+        line(b, 16 - wide, sy, 15 - wide, sy + 6 - sw, col, 2)
+        line(b, 15 + wide, sy, 16 + wide, sy + 6 - (1 - sw), col, 2)
+        disc(b, 16 - wide, sy + 7.5 - sw, 1.4, hand)
+        disc(b, 17 + wide, sy + 6.5 + sw, 1.4, hand)
+
+
+def head32(b, d, hx, hy, skin, r=5.2, eyes=1):
+    shade_sphere(b, hx, hy, r, skin)
+    if d == 0:
+        put(b, hx - 2, hy + 1, eyes)
+        put(b, hx + 1, hy + 1, eyes)
+    elif d == 2:
+        put(b, hx + 2, hy + 1, eyes)
+
+
+def finish(b, d, f, rx=9):
+    b = add_outline(b)
+    o = bmp(32, 32)
+    shadow(o, 16, 28, rx, 3)
+    for y in range(32):
+        for x in range(32):
+            if b[y][x]:
+                o[y][x] = b[y][x]
+    return o
+
+
+def crescent(b, cx, cy, rx, ry, horiz=False, flip=False):
+    """an axe blade: a grey half-moon out from the haft at (cx, cy), its cutting edge lit"""
+    for y in range(32):
+        for x in range(32):
+            u, v = (x + 0.5 - cx) / rx, (y + 0.5 - cy) / ry
+            if horiz:
+                u, v = v, u
+            if flip:
+                u = -u
+            if u >= 0 and u * u + v * v <= 1 and not (u < 0.35 and abs(v) > 0.45):
+                b[y][x] = 5 if u * u + v * v > 0.55 else (4 if v < 0.2 else 3)
+
+
+# ---- Axe (palette line 3: red skin)
+AXE_SKIN = [14, 10, 12]
+def axe32(d, f):
+    b = bmp(32, 32)
+    hx = 17 if d == 2 else 16
+    if d == 1 and f != 2:                                # axe on his back seen from behind
+        line(b, 8, 26, 24, 4, 7)
+        crescent(b, 23, 6, 4.5, 5, horiz=True, flip=True)
+    legs32(b, d, f, 2, 13)
+    shade_sphere(b, 16, 17, 0, AXE_SKIN, rx=7.5 if d != 2 else 5.5, ry=5.5)   # bare red torso
+    if d != 1:
+        line(b, 10, 13, 21, 21, 13, 2)                   # leather strap across the chest
+    else:
+        line(b, 22, 13, 11, 21, 13, 2)
+    rect(b, 9, 21, 23, 22, 13)                           # belt with a gold buckle
+    put(b, 16, 21, 15)
+    put(b, 16, 22, 15)
+    if d != 2:
+        shade_sphere(b, 8.5, 13.5, 3, [2, 3, 4])         # pauldrons
+        shade_sphere(b, 23.5, 13.5, 3, [2, 3, 4])
+    else:
+        shade_sphere(b, 16, 13.5, 3, [2, 3, 4])
+    if f != 2:
+        arms32(b, d, f, 10, 10, sy=15, wide=8)
+    head32(b, d, hx, 8, AXE_SKIN, r=4.6)
+    rect(b, hx - 3, 3, hx + 3, 4, 1)                     # black hair, topknot
+    rect(b, hx - 1, 0, hx + 1, 3, 1)
+    if d != 1:
+        rect(b, hx - 2 + (1 if d == 2 else 0), 11, hx + 2, 13, 1)    # beard
+        put(b, hx + (1 if d == 2 else 0), 14, 1)
+        if d == 0:
+            put(b, hx - 2, 9, 15)
+            put(b, hx + 1, 9, 15)
         else:
-            line(b, 7, ay, 6, ay + 5 - sw, arm, 2)
-            line(b, 17, ay, 18, ay + 4 + sw, arm, 2)
-        if weapon == "staff":
-            line(b, 19, 3 - sw, 19, 20 - sw, wcol)
-            disc(b, 19.5, 3.5 - sw, 1.8, glow)
-        elif weapon == "gun":
-            line(b, 16, 17 - sw, 22, 5 - sw, wcol)
-            put(b, 20, 8 - sw, 5)
-            put(b, 22, 4 - sw, 3)
-        elif weapon == "bow":
-            line(b, 19, 5, 21, 9, wcol)
-            line(b, 21, 9, 21, 14, wcol)
-            line(b, 21, 14, 19, 18, wcol)
-            line(b, 19, 5, 19, 18, 4)
-        elif weapon == "sword":
-            line(b, 18, 15 - sw, 22, 5 - sw, 5)
-            line(b, 17, 16 - sw, 18, 16 - sw, 15)
+            put(b, hx + 2, 9, 15)
+    else:
+        rect(b, hx - 3, 4, hx + 3, 9, 1)
+    blade = [2, 3, 4, 5]
+    if f == 2:                                           # the chop
+        if d == 0:
+            line(b, 22, 15, 20, 29, 7, 2)
+            crescent(b, 20, 25, 5, 5.5, horiz=True)
+            line(b, 23, 15, 21, 19, 10, 2)
+        elif d == 1:
+            line(b, 22, 15, 21, 2, 7, 2)
+            crescent(b, 21, 6, 5, 5.5, horiz=True, flip=True)
+            line(b, 23, 15, 22, 11, 10, 2)
         else:
-            put(b, 6, ay + 6 - sw, glow)
-            put(b, 18, ay + 5 + sw, glow)
-    return add_outline(b)
+            line(b, 17, 15, 30, 13, 7, 2)
+            crescent(b, 26, 13, 5, 5.5)
+            line(b, 16, 15, 21, 15, 10, 2)
+    elif d != 1:
+        x = 26 if d == 0 else 24
+        line(b, x, 5 - (f & 1), x, 27 - (f & 1), 7)      # haft held upright
+        crescent(b, x + 1, 6.5 - (f & 1), 4.5, 5.5)      # double blade
+        crescent(b, x, 6.5 - (f & 1), 4.5, 5.5, flip=True)
+    return finish(b, d, f, 10)
 
 
-HERO_SPECS = {
-    "sniper": dict(skin=6, body=3, legs_c=2, hair=15, style="helmet", beard=15, weapon="gun", wcol=2, short=True),
-    "zeus": dict(skin=6, body=4, robe=True, trim=8, hair=5, style="long", beard=5, glow=8),
-    "lina": dict(skin=6, body=12, robe=True, trim=15, hair=15, style="flame", glow=15),
-    "cm": dict(skin=6, body=8, robe=True, trim=5, hair=5, style="hood", weapon="staff", wcol=4, glow=5),
-    "drow": dict(skin=8, body=13, legs_c=13, hair=5, style="long", weapon="bow", wcol=6),
-    "jugg": dict(skin=6, body=6, legs_c=15, hair=12, style="mask", weapon="sword"),
-}
+# ---- Sniper (keen: short, big helmet, long rifle)
+SN_SKIN = [14, 7, 6]
+def sniper32(d, f):
+    b = bmp(32, 32)
+    hx = 17 if d == 2 else 16
+    if f == 2:
+        gun = {0: ((16, 18), (16, 31)), 1: ((16, 15), (16, 1)), 2: ((17, 18), (31, 18))}[d]
+    else:
+        gun = ((7, 26), (26, 7)) if d != 1 else ((6, 8), (25, 26))
+    if d == 1:
+        line(b, *gun[0], *gun[1], 2, 2)
+    legs32(b, d, f, 7, 14, y0=23)
+    shade_sphere(b, 16, 19.5, 0, [9, 10, 11], rx=6 if d != 2 else 4.5, ry=4.5)   # green coat
+    rect(b, 10, 21, 22, 22, 14)
+    put(b, 15, 21, 15)
+    if d != 1:
+        arms32(b, d, f, 10, 6, sy=17, wide=6)
+        line(b, *gun[0], *gun[1], 2, 2)                  # rifle: dark barrel, wooden stock
+        line(b, gun[0][0], gun[0][1], (gun[0][0] * 2 + gun[1][0]) // 3, (gun[0][1] * 2 + gun[1][1]) // 3, 7, 2)
+        put(b, *gun[1], 15 if f == 2 else 4)
+        if f == 2:
+            put(b, gun[1][0] + (1 if d == 2 else 0), gun[1][1] + (1 if d == 0 else 0), 5)
+    else:
+        arms32(b, d, f, 10, 6, sy=17, wide=6)
+    head32(b, d, hx, 11, SN_SKIN, r=5)
+    # brass helmet with goggles
+    for y in range(3, 10):
+        for x in range(hx - 6, hx + 7):
+            if ((x + 0.5 - hx) / 6.2) ** 2 + ((y + 0.5 - 9) / 5.6) ** 2 <= 1:
+                b[y][x] = 15 if (x - hx) < -1 and y < 7 else 7
+    rect(b, hx - 6, 9, hx + 6, 9, 14)                    # brim
+    if d == 0:
+        rect(b, hx - 4, 6, hx + 3, 7, 2)
+        disc(b, hx - 2, 6.5, 1.3, 8)
+        disc(b, hx + 2, 6.5, 1.3, 8)
+        rect(b, hx - 4, 13, hx + 4, 16, 15)               # bushy beard
+        put(b, hx, 17, 15)
+        rect(b, hx - 2, 13, hx + 2, 13, 7)
+    elif d == 2:
+        disc(b, hx + 3, 6.5, 1.3, 8)
+        rect(b, hx, 13, hx + 4, 16, 15)
+    return finish(b, d, f, 8)
 
 
-def spec_frame(name):
-    return lambda d, f: humanoid(d, f, **HERO_SPECS[name])
+# ---- Zeus (white robe, white beard, lightning)
+ZEUS_SKIN = [14, 7, 6]
+def zeus32(d, f):
+    b = bmp(32, 32)
+    hx = 17 if d == 2 else 16
+    robe_fill(b, 14, 27, 5, 8, [3, 4, 5], trim=8)
+    rect(b, 11, 19, 21, 19, 8)                           # blue sash
+    if d == 2:
+        for y in range(14, 28):
+            for x in range(8, 11):
+                b[y][x] = 0
+    if f != 2:
+        arms32(b, d, f, 4, 7, sy=15, wide=6)
+        if d != 1:
+            put(b, 9 + (f & 1), 23, 8)                   # sparks in his hands
+            put(b, 24, 22, 15)
+    head32(b, d, hx, 9, ZEUS_SKIN, r=5)
+    for y in range(2, 9):                                # white hair, combed back
+        for x in range(hx - 6, hx + 7):
+            if ((x + 0.5 - hx) / 6) ** 2 + ((y + 0.5 - 8) / 5.5) ** 2 <= 1 and (d == 1 or y < 7 or abs(x - hx) > 4):
+                b[y][x] = 5 if x - hx < 1 else 4
+    if d == 1:
+        rect(b, hx - 5, 7, hx + 5, 15, 4)
+        rect(b, hx - 4, 7, hx + 3, 14, 5)
+    else:
+        bx = 1 if d == 2 else 0
+        rect(b, hx - 3 + bx, 11, hx + 3, 16, 5)          # long beard
+        rect(b, hx - 2 + bx, 17, hx + 2, 18, 4)
+        put(b, hx + bx, 19, 4)
+    if f == 2:                                           # arm thrown out with a bolt
+        if d == 0:
+            line(b, 21, 15, 23, 21, 4, 2)
+            for p in ((23, 23), (22, 24), (24, 25), (23, 26), (25, 27), (24, 28), (26, 29)):
+                put(b, *p, 15)
+            put(b, 24, 22, 5)
+        elif d == 1:
+            line(b, 21, 15, 23, 8, 4, 2)
+            for p in ((23, 6), (22, 5), (24, 4), (23, 3), (25, 2), (24, 1)):
+                put(b, *p, 15)
+        else:
+            line(b, 17, 15, 23, 13, 4, 2)
+            for p in ((25, 13), (26, 12), (27, 14), (28, 13), (29, 15), (30, 14), (31, 16)):
+                put(b, *p, 15)
+            put(b, 24, 13, 5)
+    return finish(b, d, f, 9)
 
 
-# ---------------------------------------------------------------- creeps (16x16, 3/4 top-down)
+# ---- Lina (palette line 3: flame hair, red dress)
+LINA_SKIN = [14, 7, 6]
+def lina32(d, f):
+    b = bmp(32, 32)
+    hx = 17 if d == 2 else 16
+    robe_fill(b, 14, 27, 4, 7.5, [9, 10, 11], trim=15)
+    if f != 2:
+        arms32(b, d, f, 6, 6, sy=15, wide=5)
+        if d != 1:
+            put(b, 10, 21 - (f & 1), 15)                 # embers in her hands
+            put(b, 22, 20 + (f & 1), 11)
+    head32(b, d, hx, 9, LINA_SKIN, r=4.8)
+    # hair: swept up and back into flame tongues
+    flick = f & 1
+    for k, x in enumerate(range(hx - 5, hx + 6)):
+        top = 1 + ((k * 3 + flick) % 4)
+        for y in range(top, 7 if d != 1 else 12):
+            b[y][x] = 15 if y < top + 1 else (11 if y < top + 3 else 10)
+    rect(b, hx - 6, 6, hx - 5, 13, 10)
+    rect(b, hx + 5, 6, hx + 6, 13, 10)
+    if d == 1:
+        rect(b, hx - 5, 6, hx + 5, 14, 10)
+        rect(b, hx - 3, 8, hx + 3, 13, 11)
+    if f == 2:                                           # a fireball thrown forward
+        if d == 0:
+            line(b, 11, 15, 14, 21, 6, 2)
+            line(b, 21, 15, 18, 21, 6, 2)
+            shade_sphere(b, 16, 25, 3.2, [10, 11, 15, 5])
+        elif d == 1:
+            line(b, 11, 15, 13, 9, 6, 2)
+            line(b, 21, 15, 19, 9, 6, 2)
+            shade_sphere(b, 16, 4, 3.2, [10, 11, 15, 5])
+        else:
+            line(b, 17, 15, 23, 15, 6, 2)
+            shade_sphere(b, 27, 15, 3.2, [10, 11, 15, 5])
+    return finish(b, d, f, 8)
+
+
+# ---- Crystal Maiden (blue hooded cloak, staff)
+CM_SKIN = [7, 6, 5]
+CM_CLOAK = [3, 8, 5]
+def cm32(d, f):
+    b = bmp(32, 32)
+    hx = 17 if d == 2 else 16
+    sx = 25 if d == 0 else (22 if d == 2 else 7)
+    if d == 1 and f != 2:
+        line(b, sx, 4, sx, 27, 7)
+    robe_fill(b, 13, 27, 5.5, 9, CM_CLOAK, trim=5)
+    if d != 1:
+        robe_fill(b, 15, 27, 2, 3.5, [4, 5, 5])          # white dress between the cloak flaps
+    if f != 2:
+        arms32(b, d, f, 8, 6, sy=15, wide=6)
+    if d != 1 and f != 2:
+        line(b, sx, 4 - (f & 1), sx, 27 - (f & 1), 7)    # staff
+        shade_sphere(b, sx, 3.5 - (f & 1), 2.3, [8, 5, 5])
+    shade_sphere(b, hx, 9, 6, CM_CLOAK)                  # hood
+    if d != 1:
+        ox = 1 if d == 2 else 0
+        shade_sphere(b, hx + ox, 10, 3.6, CM_SKIN, rx=3.4, ry=3.8)   # face in the hood
+        rect(b, hx - 3 + ox, 7, hx + 3 + ox, 7, 5)       # white fringe
+        if d == 0:
+            put(b, hx - 2, 10, 1)
+            put(b, hx + 1, 10, 1)
+        else:
+            put(b, hx + 2, 10, 1)
+    else:
+        rect(b, hx - 1, 4, hx + 1, 14, 3)
+    if f == 2:                                           # staff thrust forward in a burst of frost
+        if d == 0:
+            line(b, 21, 15, 20, 28, 7)
+            line(b, 21, 15, 21, 20, 8, 2)
+            pts = (20, 29)
+        elif d == 1:
+            line(b, 21, 15, 21, 2, 7)
+            line(b, 21, 15, 22, 10, 8, 2)
+            pts = (21, 2)
+        else:
+            line(b, 16, 15, 29, 11, 7)
+            line(b, 16, 15, 21, 15, 8, 2)
+            pts = (29, 11)
+        x, y = pts
+        for dx, dy in ((0, 0), (-1, 0), (1, 0), (0, -1), (0, 1), (-2, -2), (2, 2), (2, -2), (-2, 2)):
+            put(b, x + dx, y + dy, 5 if dx == dy == 0 else 8)
+    return finish(b, d, f, 9)
+
+
+# ---- Drow Ranger (pale blue skin, white hair, dark hood, bow)
+DROW_SKIN = [3, 8, 5]
+def drow32(d, f):
+    b = bmp(32, 32)
+    hx = 17 if d == 2 else 16
+    if d != 2:
+        robe_fill(b, 13, 25, 5, 8, [2, 2, 3])            # dark cloak behind
+    legs32(b, d, f, 2, 1)
+    shade_sphere(b, 16, 18, 0, [9, 10, 10], rx=5.5 if d != 2 else 4, ry=5)   # green leather tunic
+    rect(b, 11, 21, 21, 21, 14)
+    if d == 1:
+        rect(b, 19, 11, 21, 20, 14)                      # quiver
+        for x in (19, 21):
+            put(b, x, 10, 5)
+        robe_fill(b, 13, 25, 4, 7, [2, 2, 3])
+    if f != 2:
+        arms32(b, d, f, 3, 8, sy=15, wide=6)
+        if d != 1:
+            bx = 24 if d == 0 else 21                    # bow held at the side
+            line(b, bx, 9, bx + 2, 14, 7)
+            line(b, bx + 2, 14, bx + 2, 20, 7)
+            line(b, bx + 2, 20, bx, 25, 7)
+            line(b, bx, 9, bx, 25, 4)
+    head32(b, d, hx, 9, DROW_SKIN, r=4.6)
+    shade_sphere(b, hx, 7.5, 5.8, [2, 2, 3], rx=6, ry=5)   # dark hood
+    if d != 1:
+        ox = 1 if d == 2 else 0
+        shade_sphere(b, hx + ox, 10, 3.3, DROW_SKIN, rx=3.2, ry=3.4)
+        rect(b, hx - 4 + ox, 8, hx - 3 + ox, 15, 5)       # white hair falling out of the hood
+        rect(b, hx + 3 + ox, 8, hx + 4 + ox, 15, 4)
+        if d == 0:
+            put(b, hx - 2, 10, 1)
+            put(b, hx + 1, 10, 1)
+        else:
+            put(b, hx + 2, 10, 1)
+    else:
+        rect(b, hx - 3, 10, hx + 3, 17, 5)
+        rect(b, hx + 1, 10, hx + 3, 17, 4)
+    if f == 2:                                           # bow drawn, arrow nocked
+        if d == 0:
+            line(b, 10, 23, 16, 26, 7)
+            line(b, 16, 26, 22, 23, 7)
+            line(b, 10, 23, 22, 23, 4)
+            line(b, 16, 17, 16, 29, 5)
+            put(b, 16, 30, 3)
+            line(b, 11, 15, 15, 21, 3, 2)
+            line(b, 21, 15, 17, 21, 3, 2)
+        elif d == 1:
+            line(b, 10, 8, 16, 5, 7)
+            line(b, 16, 5, 22, 8, 7)
+            line(b, 10, 8, 22, 8, 4)
+            line(b, 16, 14, 16, 3, 5)
+        else:
+            line(b, 25, 8, 27, 14, 7)
+            line(b, 27, 14, 27, 18, 7)
+            line(b, 27, 18, 25, 24, 7)
+            line(b, 25, 8, 25, 24, 4)
+            line(b, 18, 16, 30, 16, 5)
+            line(b, 17, 15, 25, 16, 3, 2)
+    return finish(b, d, f, 8)
+
+
+# ---- Juggernaut (tiki mask, red crest, bare chest, katana)
+JUGG_SKIN = [14, 7, 6]
+def jugg32(d, f):
+    b = bmp(32, 32)
+    hx = 17 if d == 2 else 16
+    legs32(b, d, f, 3, 1)
+    rect(b, 11, 21, 21, 23, 4)                           # baggy grey trousers top
+    shade_sphere(b, 16, 17, 0, JUGG_SKIN, rx=6 if d != 2 else 4.5, ry=5)   # bare chest
+    rect(b, 10, 20, 22, 21, 12)                          # red sash
+    put(b, 21, 22, 12)
+    if f != 2:
+        arms32(b, d, f, 7, 7, sy=14, wide=6)
+        if d != 1:
+            line(b, 23, 21, 29, 9, 5)                    # katana held low
+            line(b, 22, 22, 23, 21, 15)
+    # mask: a tall orange tiki mask covering the head
+    shade_sphere(b, hx, 8.5, 5.5, [14, 7, 15], rx=5, ry=6)
+    rect(b, hx - 1, 0, hx + 1, 3, 12)                    # red crest
+    put(b, hx, 0, 14)
+    if d == 0:
+        rect(b, hx - 3, 7, hx - 2, 8, 1)                 # eye holes and a red painted mouth
+        rect(b, hx + 1, 7, hx + 2, 8, 1)
+        rect(b, hx - 2, 11, hx + 2, 12, 12)
+        for x in range(hx - 2, hx + 3, 2):
+            put(b, x, 11, 5)                             # teeth
+        line(b, hx, 4, hx, 9, 14)                        # carved ridge down the brow
+    elif d == 2:
+        rect(b, hx + 2, 7, hx + 3, 8, 1)
+        rect(b, hx + 1, 11, hx + 4, 12, 12)
+    else:
+        rect(b, hx - 3, 9, hx + 3, 14, 7)                # back of the mask, strap
+        line(b, hx - 4, 9, hx + 4, 9, 14)
+    if f == 2:                                           # the slash: blade swept wide in front
+        if d == 0:
+            line(b, 21, 14, 19, 21, 7, 2)
+            line(b, 19, 22, 6, 28, 5)
+            line(b, 19, 23, 7, 29, 4)
+            put(b, 20, 22, 15)
+        elif d == 1:
+            line(b, 21, 14, 21, 9, 7, 2)
+            line(b, 21, 8, 8, 2, 5)
+            put(b, 21, 8, 15)
+        else:
+            line(b, 16, 14, 21, 17, 7, 2)
+            line(b, 22, 18, 31, 22, 5)
+            line(b, 22, 19, 30, 23, 4)
+            put(b, 22, 18, 15)
+    return finish(b, d, f, 8)
+
+
 def melee_frame(d, f):
     b = bmp(16, 16)
     shadow(b, 8, 14, 5, 2)
@@ -1915,9 +2104,8 @@ logo_map = add_map(logo)
 sprite_tiles = len(tiles)
 
 # heroes live in ROM only: the game copies the four in play into VRAM slots after GFX_TILES
-HERO_FNS = [sf_frame, pudge_frame, axe_frame] + [spec_frame(n) for n in
-            ("sniper", "zeus", "lina", "cm", "drow")] + [viper_frame, spec_frame("jugg")]
-PORT_ORG = {pudge_frame: (4, 2), sf_frame: (4, 2), viper_frame: (4, 7)}   # art drawn at 32x32 names where its 24x24 HUD portrait is cut
+HERO_FNS = [sf_frame, pudge_frame, axe32, sniper32, zeus32, lina32, cm32, drow32, viper_frame, jugg32]
+PORT_ORG = {pudge_frame: (4, 2), sf_frame: (4, 2), viper_frame: (4, 7)}   # where each 24x24 HUD portrait is cut
 
 
 def scale2x(b):
@@ -1983,29 +2171,20 @@ TOP_DOWN = {viper_frame}   # seen straight from above: its diagonals are the pos
 
 def hero32(fn, d, f):
     """a hero pose on its 32x32 sprite; d 3/4 are the diagonals south-east and north-east, made from
-    the south and north poses. Older 24x24 art sits centred with its feet where they were"""
-    if d >= 3:
-        if fn in TOP_DOWN:
-            b = rotate45(fn(d - 3, f, sh=False, span=0.82), d == 4)
-        else:
-            b = half_turn(strip_outline(hero32(fn, d - 3, f)))
-        b = add_outline(b)
-        o = bmp(32, 32)
-        if len(fn(0, 0)) == 32:
-            shadow(o, 16, 28, 10, 3.5)
-        else:
-            shadow(o, 16, 27, 8, 3)
-        for y in range(32):
-            for x in range(32):
-                if b[y][x]:
-                    o[y][x] = b[y][x]
-        return o
-    b = fn(d, f)
-    if len(b) == 32:
-        return b
+    the south and north poses"""
+    if d < 3:
+        return fn(d, f)
+    if fn in TOP_DOWN:
+        b = rotate45(fn(d - 3, f, sh=False, span=0.82), d == 4)
+    else:
+        b = half_turn(strip_outline(fn(d - 3, f)))
+    b = add_outline(b)
     o = bmp(32, 32)
-    for y in range(24):
-        o[y + 6][4:28] = b[y]
+    shadow(o, 16, 28, 9, 3)
+    for y in range(32):
+        for x in range(32):
+            if b[y][x]:
+                o[y][x] = b[y][x]
     return o
 
 
@@ -2017,7 +2196,7 @@ for fn in HERO_FNS:
             for tx in range(4):
                 for ty in range(4):
                     hero_tiles.append(tile_at(b, tx, ty))
-    px, py = PORT_ORG.get(fn, (4, 6))
+    px, py = PORT_ORG.get(fn, (4, 1))
     b = hero32(fn, 0, 0)
     b = [r[px:px + 24] for r in b[py:py + 24]]
     for tx in range(3):
@@ -2190,13 +2369,6 @@ if os.environ.get("PREVIEW"):
                     full[by - h // 2 + y][bx - h // 2 + x] = 15
     save("map", full, PAL_MAP)
     sheet = bmp(9 * 24, 5 * 24 + 16)
-    for i in range(9):
-        for y, row in enumerate(sf_frame(i // 3, i % 3)):
-            sheet[y][i * 24:i * 24 + 24] = row
-        for y, row in enumerate(pudge_frame(i // 3, i % 3)):
-            sheet[24 + y][i * 24:i * 24 + 24] = row
-        for y, row in enumerate(axe_frame(i // 3, i % 3)):
-            sheet[112 + y][i * 24:i * 24 + 24] = row
     for i in range(6):
         for y, row in enumerate(melee_frame(i // 2, i % 2)):
             sheet[48 + y][i * 16:i * 16 + 16] = row
