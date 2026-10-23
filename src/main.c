@@ -684,7 +684,7 @@ static const u8 st_rng[NHERO] = { 80, 20, 20, 96, 72, 76, 70, 90, 80, 20 };
 static const u8 st_spd[NHERO] = { 21, 19, 22, 20, 20, 21, 19, 21, 21, 23 };
 static const u8 st_rate[NHERO] = { 50, 56, 54, 52, 56, 54, 58, 52, 52, 50 };
 /* the palette line each hero is drawn in: Radiant's (green 9-11) or Dire's (orange-red 9-11) */
-static const u8 hero_pal[NHERO] = { 2, 2, 3, 2, 2, 3, 2, 2, 2, 2 };
+static const u8 hero_pal[NHERO] = { 2, 2, 3, 2, 2, 3, 2, 2, 2, 3 };
 static const u8 st_pj[NHERO] = { PJ_SF, 0, 0, PJ_BULLET, PJ_ICE, PJ_FIRE, PJ_ICE, PJ_ICE, PJ_POISON, 0 };
 
 /* table-driven skills. cd is in units of 16 frames; dmg = base + per * level; for SK_LINE range is

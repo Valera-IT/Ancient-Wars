@@ -1243,53 +1243,189 @@ def drow32(d, f):
 
 
 # ---- Juggernaut (tiki mask, red crest, bare chest, katana)
-JUGG_SKIN = [7, 6, 6]
-def jugg32(d, f):
+# ------------------------------------------------------------ hand-drawn 32x32 kit
+def mirror_rows(half):
+    """a front or back view drawn as its left half; the right half is the mirror image"""
+    return [h.ljust(16)[:16] + h.ljust(16)[:16][::-1] for h in half]
+
+
+def pad_rows(rows):
+    return [list(r.ljust(32)) for r in rows] + [[" "] * 32 for _ in range(32 - len(rows))]
+
+
+def overlay(rows, pts):
+    rows = pad_rows(rows)
+    for x, y, ch in pts:
+        rows[y][x] = ch
+    return ["".join(r) for r in rows]
+
+
+def limb(rows, path, c=("S", "s"), wrap=None):
+    """a 2-px arm along the joint path, outlined in black even where it crosses the body;
+    wrap = (n, ch) paints the last n steps as a bracer"""
+    rows = pad_rows(rows)
+    px = []
+    for (x0, y0), (x1, y1) in zip(path, path[1:]):
+        n = max(abs(x1 - x0), abs(y1 - y0), 1)
+        for i in range(n + 1):
+            x, y = round(x0 + (x1 - x0) * i / n), round(y0 + (y1 - y0) * i / n)
+            px += [(x, y, c[0]), (x + 1, y, c[1]), (x, y + 1, c[1]), (x + 1, y + 1, c[1])]
+    if wrap:
+        px += [(x, y, wrap[1]) for x, y, _ in px[-4 * wrap[0]:]]
+    own = {(x, y) for x, y, _ in px}
+    for x, y, _ in px:
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            X, Y = x + dx, y + dy
+            if 0 <= X < 32 and 0 <= Y < 32 and (X, Y) not in own:
+                rows[Y][X] = "#"
+    for x, y, ch in px:
+        rows[y][x] = ch
+    return ["".join(r) for r in rows]
+
+
+def katana(rows, x0, y0, x1, y1, hilt=3, cols="DYW"):
+    """a blade from the fist (x0, y0) to the tip: dark hilt, a gold guard, then steel"""
+    rows = pad_rows(rows)
+    n = max(abs(x1 - x0), abs(y1 - y0))
+    pts = [(round(x0 + (x1 - x0) * i / n), round(y0 + (y1 - y0) * i / n),
+            cols[0] if i < hilt else (cols[1] if i == hilt else cols[2])) for i in range(n + 1)]
+    for x, y, _ in pts:
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            X, Y = x + dx, y + dy
+            if 0 <= X < 32 and 0 <= Y < 32 and rows[Y][X] == " ":
+                rows[Y][X] = "#"
+    for x, y, ch in pts:
+        if 0 <= x < 32 and 0 <= y < 32:
+            rows[y][x] = ch
+    return ["".join(r) for r in rows]
+
+
+def ascii_frame(poses, cols, d, f, sh=True, rx=10):
+    """a hand-drawn hero: poses = (S, N, E, S attack, N attack, E attack); the walk step bobs a pixel"""
+    rows = poses[d + (3 if f == 2 else 0)]
     b = bmp(32, 32)
-    hx = 17 if d == 2 else 16
-    legs32(b, d, f, 3, 1)
-    rect(b, 11, 21, 21, 23, 4)                           # baggy grey trousers top
-    shade_sphere(b, 16, 17, 0, JUGG_SKIN, rx=6 if d != 2 else 4.5, ry=5)   # bare chest
-    rect(b, 10, 20, 22, 21, 12)                          # red sash
-    put(b, 21, 22, 12)
-    if f != 2:
-        arms32(b, d, f, 7, 7, sy=14, wide=6)
-        if d != 1:
-            line(b, 23, 21, 29, 9, 5)                    # katana held low
-            line(b, 22, 22, 23, 21, 15)
-    # mask: a tall orange tiki mask covering the head
-    shade_sphere(b, hx, 8.5, 5.5, [7, 7, 15], rx=5, ry=6)
-    rect(b, hx - 1, 0, hx + 1, 3, 12)                    # red crest
-    put(b, hx, 0, 14)
-    if d == 0:
-        rect(b, hx - 3, 7, hx - 2, 8, 1)                 # eye holes and a red painted mouth
-        rect(b, hx + 1, 7, hx + 2, 8, 1)
-        rect(b, hx - 2, 11, hx + 2, 12, 12)
-        for x in range(hx - 2, hx + 3, 2):
-            put(b, x, 11, 5)                             # teeth
-        line(b, hx, 4, hx, 9, 14)                        # carved ridge down the brow
-    elif d == 2:
-        rect(b, hx + 2, 7, hx + 3, 8, 1)
-        rect(b, hx + 1, 11, hx + 4, 12, 12)
-    else:
-        rect(b, hx - 3, 9, hx + 3, 14, 7)                # back of the mask, strap
-        line(b, hx - 4, 9, hx + 4, 9, 14)
-    if f == 2:                                           # the slash: blade swept wide in front
-        if d == 0:
-            line(b, 21, 14, 19, 21, 7, 2)
-            line(b, 19, 22, 6, 28, 5)
-            line(b, 19, 23, 7, 29, 4)
-            put(b, 20, 22, 15)
-        elif d == 1:
-            line(b, 21, 14, 21, 9, 7, 2)
-            line(b, 21, 8, 8, 2, 5)
-            put(b, 21, 8, 15)
-        else:
-            line(b, 16, 14, 21, 17, 7, 2)
-            line(b, 22, 18, 31, 22, 5)
-            line(b, 22, 19, 30, 23, 4)
-            put(b, 22, 18, 15)
-    return finish(b, d, f, 8)
+    if sh:
+        shadow(b, 16, 28, rx, 3.5)
+    dy = 1 if f == 1 else 0
+    for y, r in enumerate(rows):
+        for x, ch in enumerate(r):
+            if ch != " " and y + dy < 32:
+                b[y + dy][x] = cols[ch]
+    return b
+
+
+JUGG_S_HALF = [
+"              ##",
+"            ##OO",
+"          ##OOGG",
+"        ##OGGGgg",
+"       #OG######",
+"       #O#YYYYYY",
+"      #OG#YoYYYY",
+"      #OG#YDDYYr",
+"      #Gg#Y##YYr",
+"      #Gg#o##YYY",
+"      #Gg#oYYYYY",
+"      #Gg##k####",
+"      #Gg#kkWkWk",
+"     #sGg##kkkkk",
+"    #sSsg#sssss#",
+"   #sSSSSs#sSSss",
+"   #sSSSSs#sSSSs",
+"   #ksSSsk#ksSSs",
+"    #kSSk#kssSss",
+"    #GGGG#ksksss",
+"    #GOOG#kkkkks",
+"    #ssSs#GGGGOO",
+"     #ssk#hhhhGO",
+"      ##hhhhhHHH",
+"       #hhhhhHH#",
+"       #hhhhHHH#",
+"       #hhhhhHH#",
+"       #GGGGGGG#",
+"       #kkkkkkk#",
+"        ########",
+]   # Juggernaut: a wooden tiki mask under an orange mane, bare chest, baggy grey trousers
+JUGG_N_HALF = [
+"              ##",
+"            ##OO",
+"          ##OOGG",
+"        ##OGGGOO",
+"       #OG#OOGGO",
+"       #O#OGGOOG",
+"      #OG#OGgGGO",
+"      #OG#hhhhhh",
+"      #Gg#GGOOGG",
+"      #Gg#OGgGGO",
+"      #Gg#GgGOGg",
+"      #Gg#gGgGOG",
+"      #Gg##gGgGG",
+"     #sGg##gGgGg",
+"    #sSsg#ssgGgG",
+"   #sSSSSs#sSsgG",
+"   #sSSSSs#sSSsg",
+"   #ksSSsk#ksSSs",
+"    #kSSk#kssSsk",
+"    #GGGG#ksssks",
+"    #GOOG#kkkkks",
+"    #ssSs#GGGGOO",
+"     #ssk#hhhhGO",
+"      ##hhhhhHHH",
+"       #hhhhhHH#",
+"       #hhhhHHH#",
+"       #hhhhhHH#",
+"       #GGGGGGG#",
+"       #kkkkkkk#",
+"        ########",
+]   # from behind: the mane spills down the back over the mask strap
+JUGG_E = [
+"                                ",
+"                ####            ",
+"              ##OOOO##          ",
+"            ##OOGGGGOO#         ",
+"           #OOGGgg######        ",
+"          #OGGgg#YYYYYYY#       ",
+"         #OGGgg#oYYYYYYY#       ",
+"         #OGgg#ooYYYDDYr#       ",
+"        #OGGg#ooYYYY##Yr#       ",
+"        #OGg##ooYYYY##YY#       ",
+"        #OGg#ooYYYYYYYYY#       ",
+"       #OGg##oYYY######Y#       ",
+"       #OGg#kooY#WkWkWk#        ",
+"       #OGg##kkk#######         ",
+"       #OGg##ssskk#             ",
+"      #OGg#ssSSSSss#            ",
+"      #Gg#sSSSSSSSss#           ",
+"      #Gg#sSSSSSSSSs#           ",
+"      #g#ksSSSSSSssk#           ",
+"       #kkssSSSSssk#            ",
+"       #kksssssSSkk#            ",
+"        #GGGGGGOOG#             ",
+"        #hhhhhhGO#              ",
+"       #hhhhhhhHHH#             ",
+"       #hhhhhhhHHH#             ",
+"      #hhhh##hhhHHH#            ",
+"      #hhh#  #hhhHH#            ",
+"      #GGG#  #GGGGG#            ",
+"      #kkkk# #kkkkkk#           ",
+"       ####   ######            ",
+]   # facing right, the mane streaming back
+JUGG_COLS = {"#": 1, "S": 6, "s": 7, "k": 14, "Y": 15, "o": 7, "D": 13, "r": 12, "W": 5, "w": 4, "H": 3,
+             "h": 2, "G": 10, "g": 9, "O": 11}
+_JS, _JN = mirror_rows(JUGG_S_HALF), mirror_rows(JUGG_N_HALF)
+JUGG_POSES = (
+    katana(_JS, 6, 21, 1, 30),                                       # katana hanging from the right fist
+    katana(_JN, 25, 21, 30, 30),
+    katana(limb(JUGG_E, [(13, 15), (13, 18), (18, 20)], wrap=(2, "G")), 20, 20, 31, 13),
+    overlay(katana(_JS, 25, 20, 3, 26, 2), [(x, 27 + (x < 10), "w") for x in range(5, 22)]),   # flat sweep
+    katana(_JN, 25, 18, 29, 1, 2),                                   # blade raised overhead
+    overlay(katana(limb(JUGG_E, [(13, 15), (16, 16), (20, 16)], wrap=(2, "G")), 22, 16, 31, 22, 2),
+            [(27, 24, "w"), (28, 25, "w"), (29, 26, "w"), (30, 27, "w")]),                     # forward slash
+)
+
+
+def jugg_frame(d, f, sh=True):
+    return ascii_frame(JUGG_POSES, JUGG_COLS, d, f, sh)
 
 
 def melee_frame(d, f):
@@ -2108,7 +2244,7 @@ logo_map = add_map(logo)
 sprite_tiles = len(tiles)
 
 # heroes live in ROM only: the game copies the four in play into VRAM slots after GFX_TILES
-HERO_FNS = [sf_frame, pudge_frame, axe32, sniper32, zeus32, lina32, cm32, drow32, viper_frame, jugg32]
+HERO_FNS = [sf_frame, pudge_frame, axe32, sniper32, zeus32, lina32, cm32, drow32, viper_frame, jugg_frame]
 PORT_ORG = {pudge_frame: (4, 2), sf_frame: (4, 2), viper_frame: (4, 7)}   # where each 24x24 HUD portrait is cut
 
 
