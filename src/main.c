@@ -72,19 +72,19 @@ static void vdp_init(void)
     for (i = 0; i < GFX_TILES * 8; i++) VDP_DATA32 = gfx_tiles[i];
 }
 
-/* hero sprites stay in ROM; the four in play get 81-tile slots after the other graphics */
+/* hero sprites stay in ROM (9 poses of 4x4 tiles each); the ones in play get a pose slot after the other graphics */
 #define T_HSLOT (GFX_TILES + 1)
-#define T_SKI (T_HSLOT + 9 * NH)     /* the HUD hero's four ability icons, 2x2 tiles each */
+#define T_SKI (T_HSLOT + 16 * NH)    /* the HUD hero's four ability icons, 2x2 tiles each */
 #define T_PORT (T_SKI + 16)          /* and its portrait, 3x3 */
 #define T_SKI2 (T_PORT + 9)          /* split screen: the same for the second player */
 #define T_PORT2 (T_SKI2 + 16)
 #define T_DICON 1984                 /* draft: the skills of the hero under the cursor (0xF800, past the hscroll table) */
-#define T_DHERO(k) ((k) < NHERO - 1 ? T_HSLOT + times(18, k) : T_DICON + 16)   /* draft: stand and attack poses; the last hero's fit up there */
+#define T_DHERO(k) ((k) < NHERO - 1 ? T_HSLOT + times(32, k) : T_DICON + 16)   /* draft: stand and attack poses; the last hero's fit up there */
 static void hero_tiles(u8 kind, u8 first, u8 n, u16 dst)
 {
     const u32 *src = hero_art + (first << 3);
     u16 k;
-    while (kind--) src += 81 * 8;
+    while (kind--) src += 144 * 8;
     VDP_CTRL32 = VRAM_W(dst << 5);
     for (k = (u16)n << 3; k; k--) VDP_DATA32 = *src++;
 }
@@ -718,22 +718,22 @@ static u8 souls_max(u8 i) { return hr[i].sk[1] * 5; }
 
 static s16 times(s16 a, u8 n) { s16 r = 0; while (n--) r += a; return r; }   /* no __mulsi3 */
 
-/* in a match each hero slot holds just the pose on screen (9 tiles), sent from ROM in vblank */
+/* in a match each hero slot holds just the pose on screen (16 tiles), sent from ROM in vblank */
 static u8 pose_want[NH], pose_have[NH];
 static void hero_poses(void)
 {
     u8 k;
     for (k = 0; k < nh; k++)
         if (pose_want[k] != pose_have[k]) {
-            const u32 *src = hero_art + times(72, pose_want[k]);       /* 9 tiles of 8 longs a pose */
+            const u32 *src = hero_art + times(128, pose_want[k]);      /* 16 tiles of 8 longs a pose */
             u8 j;
-            for (j = hk[k]; j; j--) src += 81 * 8;
+            for (j = hk[k]; j; j--) src += 144 * 8;
             pose_have[k] = pose_want[k];
-            if ((((u32)src) & 0x1FFFF) + 288 > 0x20000) {       /* DMA can't cross a 128K boundary */
+            if ((((u32)src) & 0x1FFFF) + 512 > 0x20000) {       /* DMA can't cross a 128K boundary */
                 u16 w;
-                VDP_CTRL32 = VRAM_W((T_HSLOT + times(9, k)) << 5);
-                for (w = 72; w; w--) VDP_DATA32 = *src++;
-            } else dma_vram(src, (T_HSLOT + times(9, k)) << 5, 144);
+                VDP_CTRL32 = VRAM_W((T_HSLOT + times(16, k)) << 5);
+                for (w = 128; w; w--) VDP_DATA32 = *src++;
+            } else dma_vram(src, (T_HSLOT + times(16, k)) << 5, 256);
         }
 }
 
@@ -2559,8 +2559,7 @@ static void hud_art(u8 h, u16 tski, u16 tport)
     u16 k;
     VDP_CTRL32 = VRAM_W(tski << 5);
     for (k = 128; k; k--) VDP_DATA32 = *src++;
-    src = hero_art;
-    for (k = hk[h]; k; k--) src += 81 * 8;
+    src = hero_port + times(72, hk[h]);
     VDP_CTRL32 = VRAM_W(tport << 5);
     for (k = 0; k < 72; k++) {          /* 9 tiles column-major: on an orange field in a white frame */
         u32 v = *src++, o = 0;
@@ -2759,7 +2758,7 @@ static void draw_scene(void)
             if (v->hunger && (vcount & 8)) pal ^= 1;
             if (H->buf_t) { sd = sdir_of[(vcount >> 2) & 7]; f = 2; }        /* Blade Fury spin */
             pose_want[i] = sd * 3 + f;
-            de_add(y, x - 12, y - 20, 0x0A, ATTR(pal, 0, T_HSLOT + times(9, i)) | fl);
+            de_add(y, x - 16, y - 26, 0x0F, ATTR(pal, 0, T_HSLOT + times(16, i)) | fl);
             break;
         }
         case U_MELEE:
@@ -2780,7 +2779,7 @@ static void draw_scene(void)
     }
     /* hero bars above everything */
     for (i = 0; i < nh; i++)
-        if (un[i].on) unit_bar(PX(un[i].x) - 12, PX(un[i].y) - 26, 3, un[i].hp, un[i].hpmax, un[i].team + 2);
+        if (un[i].on) unit_bar(PX(un[i].x) - 12, PX(un[i].y) - 30, 3, un[i].hp, un[i].hpmax, un[i].team + 2);
     {
         s8 b;
         for (b = 47; b >= 0; b--)
@@ -3132,8 +3131,8 @@ static u8 draft(void)
     for (y = 0; y < 24; y++) clearA(y);
     for (y = HUD_Y; y < 28; y++) clearW(y);
     for (k = 0; k < NHERO; k++) {          /* facing down: standing and attacking */
-        hero_tiles(k, 0, 9, T_DHERO(k));
-        hero_tiles(k, 18, 9, T_DHERO(k) + 9);
+        hero_tiles(k, 0, 16, T_DHERO(k));
+        hero_tiles(k, 32, 16, T_DHERO(k) + 16);
     }
     pal_set(1, pal_ui);
     panelA(1, 39, 12, 23);
@@ -3218,7 +3217,7 @@ static u8 draft(void)
                     pal = 2 + (save[SV_SIDE] ^ (m & 1));
                 }
             if (k == cur) pal = 2 + (save[SV_SIDE] ^ (at & 1));
-            spr(gx, gy, 0x0A, ATTR(pal, 0, T_DHERO(k) + (k == cur && (t & 32) ? 9 : 0)));
+            spr(gx - 4, gy - 6, 0x0F, ATTR(pal, 0, T_DHERO(k) + (k == cur && (t & 32) ? 16 : 0)));
             for (m = 0; m < tx; m++)
                 spr(gx + 12 - (tx << 2) + (m << 3), gy + 25, 0, ATTR(1, 1, T_FONT + (tag[m] - 32)));
             if (k == cur && (t & 16)) {
