@@ -2415,7 +2415,7 @@ static void split_hud(u8 part, u8 only)
         if (part == 0) {                /* portrait, level, HP and mana */
             u16 tp = k ? T_PORT2 : T_PORT;
             for (y = 0; y < 3; y++)
-                for (x = 0; x < 3; x++) wtile(xo + x, 24 + y, ATTR(U->team + 2, 1, tp + times(3, x) + y));
+                for (x = 0; x < 3; x++) wtile(xo + x, 24 + y, ATTR(2, 1, tp + times(3, x) + y));
             if (U->on) { b[0] = 'L'; num(H->lvl, 2, b + 1); }
             else { b[0] = 'R'; num(divs(H->respawn + 59, 60), 2, b + 1); }
             textW(xo, 27, b);
@@ -2595,7 +2595,7 @@ static void hud_static(void)
     if (split) { hud_art(0, T_SKI, T_PORT); hud_art(1, T_SKI2, T_PORT2); return; }
     hud_art(view, T_SKI, T_PORT);
     for (y = 0; y < 3; y++)
-        for (x = 0; x < 3; x++) wtile(5 + x, 24 + y, ATTR(un[view].team + 2, 1, T_PORT + times(3, x) + y));
+        for (x = 0; x < 3; x++) wtile(5 + x, 24 + y, ATTR(2, 1, T_PORT + times(3, x) + y));
     for (y = 0; y < 3; y++) wtile(11, 24 + y, ATTR(1, 1, T_HICON + y));
     for (y = HUD_Y; y < 28; y++) { wtile(19, y, ATTR(1, 1, T_FRAME + 1)); wtile(31, y, ATTR(1, 1, T_FRAME + 1)); }
     panelA(14, 26, 0, 1);
@@ -2760,8 +2760,9 @@ static void draw_scene(void)
         sd = sdir_of[v->face & 7];
         fl = (v->face >= 3 && v->face <= 5) ? HFLIP : 0;
         switch (v->type) {
-        case U_HERO: {
+        case U_HERO: {           /* heroes keep their own colours on either side: line 2 */
             Hero *H = &hr[i];
+            pal = 2;
             u8 f = (v->wind || H->chan_t || H->cast_lock || H->hook_st == 1) ? 2 : ((v->anim >> 3) & 1);
             if (v->stun && (vcount & 4)) break;
             if (v->hunger && (vcount & 8)) pal ^= 1;
@@ -2818,7 +2819,7 @@ static void draw_scene(void)
         if (H->hook_st) {
             s16 hx = PX(H->hx), hy = PX(H->hy), d = dist(hx - ux, hy - uy);
             s16 n = divs(d, 10), k, sx = 0, sy = 0, ex = 0, ey = 0;
-            wspr(hx - 4, hy - 4, 0, ATTR((h & 1) + 2, 0, T_HOOK));
+            wspr(hx - 4, hy - 4, 0, ATTR(2, 0, T_HOOK));
             if (n > 0) {
                 ex = divs((s32)(s16)(hx - ux) << 6, n);
                 ey = divs((s32)(s16)(hy - uy) << 6, n);
@@ -2826,14 +2827,14 @@ static void draw_scene(void)
             for (k = 1; k < n && k < 16; k++) {
                 sx += ex;
                 sy += ey;
-                wspr(ux + (sx >> 6) - 4, uy + (sy >> 6) - 4, 0, ATTR((h & 1) + 2, 0, T_CHAIN));
+                wspr(ux + (sx >> 6) - 4, uy + (sy >> 6) - 4, 0, ATTR(2, 0, T_CHAIN));
             }
         }
         if (H->rot)
             for (i = 0; i < 4; i++) {
                 u8 a = (u8)((game_t << 1) + (i << 4));
                 wspr(ux + ((sintab[a & 63] * 24) >> 6) - 4, uy + 8 + ((sintab[(a + 16) & 63] * 16) >> 6) - 4,
-                     0, ATTR((h & 1) + 2, 0, T_ROT));
+                     0, ATTR(2, 0, T_ROT));
             }
     }
     /* projectiles */
@@ -2841,7 +2842,7 @@ static void draw_scene(void)
         Proj *p = &pj[i];
         u8 pal;
         if (!p->on) continue;
-        pal = un[(u8)p->src].team + 2;
+        pal = p->src < NH ? 2 : un[(u8)p->src].team + 2;    /* hero shots in the hero's colours */
         switch (p->kind) {
         case PJ_SF: wspr(PX(p->x) - 4, PX(p->y) - 4, 0, ATTR(pal, 0, T_ORB_SF)); break;
         case PJ_CREEP: wspr(PX(p->x) - 4, PX(p->y) - 4, 0, ATTR(pal, 0, T_ORB_CREEP)); break;
@@ -2897,7 +2898,7 @@ static void draw_scene(void)
         for (i = 0; i < 6; i++) {
             u8 a = (u8)((game_t << 2) + i * 11);
             wspr(PX(un[h].x) + ((sintab[a & 63] * 20) >> 6) - 4,
-                 PX(un[h].y) - 10 + ((sintab[(a + 16) & 63] * 20) >> 6) - 4, 0, ATTR((h & 1) + 2, 0, T_ORB_SF));
+                 PX(un[h].y) - 10 + ((sintab[(a + 16) & 63] * 20) >> 6) - 4, 0, ATTR(2, 0, T_ORB_SF));
         }
 }
 
@@ -3224,15 +3225,11 @@ static u8 draft(void)
         nspr = 0;
         for (k = 0; k < NHERO; k++) {
             s16 gx = 36 + times(56, k < 5 ? k : k - 5), gy = k < 5 ? 28 : 64;
-            u8 pal = 2, m, tx = 0;
+            u8 m, tx = 0;
             char tag[6];
             for (m = 0; m < at; m++)
-                if (*slot[m] == k) {
-                    tag[tx++] = "PEAEAE"[m];
-                    pal = 2 + (save[SV_SIDE] ^ (m & 1));
-                }
-            if (k == cur) pal = 2 + (save[SV_SIDE] ^ (at & 1));
-            spr(gx - 4, gy - 6, 0x0F, ATTR(pal, 0, T_DHERO(k) + (k == cur && (t & 32) ? 16 : 0)));
+                if (*slot[m] == k) tag[tx++] = "PEAEAE"[m];
+            spr(gx - 4, gy - 6, 0x0F, ATTR(2, 0, T_DHERO(k) + (k == cur && (t & 32) ? 16 : 0)));
             for (m = 0; m < tx; m++)
                 spr(gx + 12 - (tx << 2) + (m << 3), gy + 25, 0, ATTR(1, 1, T_FONT + (tag[m] - 32)));
             if (k == cur && (t & 16)) {

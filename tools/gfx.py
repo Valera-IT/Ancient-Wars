@@ -788,71 +788,70 @@ def pudge_frame(d, f, sh=True):
 
 
 def viper_wing(b, f, span=1.0):
-    """Viper's left wing from above: dark membrane on three finger bones, the leading edge lit;
-    the walk step pulls the tips in and up (a flap), the attack lifts them"""
-    sx, sy = 13, 12
-    k, lift = {0: (1.0, 0), 1: (0.72, -1), 2: (1.0, -1)}[f]
+    """Viper's left wing from above, after the Dota 2 look: spread flat and wide, the leading edge
+    bowed up to a spiked elbow, the trailing edge torn into long spikes, dark grey membrane with
+    dark green veins fanning from the shoulder. The walk step lifts and folds the tips (a flap)."""
+    sx, sy = 14, 10
+    k, lift = {0: (1.0, 0), 1: (0.84, -2), 2: (1.0, -1)}[f]
     k *= span
 
     def P(x, y):
-        return round(sx + (x - sx) * k), round(sy + (y - sy) * k + lift)
+        return round(sx + (x - sx) * k), round(sy + (y - sy) * k + lift * (sx - x) / 14)
 
-    elbow, tip, f2, f3 = P(8, 5), P(1, 2.5), P(0.5, 10), P(4, 17)
-    mem = [(sx, sy - 1), elbow, tip, P(3, 6), f2, P(4, 11.5), P(5.5, 13), f3, P(8, 15), P(10, 15), (12, 17), (14, 16)]
+    elbow, tip = P(9, 6), P(0, 12)
+    spikes = [P(1, 18), P(4, 21), P(8, 22), P(12, 21)]
+    mem = [(sx, sy - 1), elbow, P(4, 7), tip, spikes[0], P(3, 15.5), spikes[1], P(6, 17), spikes[2], P(9.5, 17.5),
+           spikes[3], P(13, 17.5), (14, 19)]
     for y in range(32):
         for x in range(16):
             if point_in_poly(x + 0.5, y + 0.5, mem):
-                b[y][x] = 9
-    line(b, sx, sy, *P(8, 6), 10)
-    line(b, *P(8, 6), *P(2, 3.5), 10)
-    line(b, sx, sy - 1, *elbow, 11)
-    line(b, *elbow, *tip, 11)
-    line(b, *elbow, *f2, 10)
-    line(b, *elbow, *f3, 10)
-    for p in (tip, P(8, 4), f2, f3):                     # yellow claws on the wing joints
-        put(b, *p, 15)
+                b[y][x] = 2
+    for p in spikes:                                     # veins out to every spike
+        line(b, sx - 1, sy + 1, *p, 9)
+    line(b, *elbow, *spikes[0], 9)
+    line(b, sx, sy - 1, *elbow, 10)                      # leading edge with a spiked elbow
+    line(b, *elbow, *P(4, 7), 10)
+    line(b, *P(4, 7), *tip, 10)
+    put(b, *P(9, 5), 11)
+    put(b, *P(8, 4), 11)
+    put(b, *P(4, 6), 11)
+    put(b, *tip, 11)
 
 
 def viper_frame(d, f, sh=True, span=1.0):
-    """Viper, the netherdrake, from above: a green wyvern (team colour 9-11, so Dire's is red) with
-    wings spread, head to the front and tail behind. North is the south pose turned round without
-    the face; the side pose is it turned a quarter, head east. The attack spits a poison glob."""
+    """Viper, the netherdrake, from above: wide dark wings, a narrow dark body with a glowing
+    yellow-green spine from tail to head.
+    North is the south pose turned round without the face; the side pose is it turned a quarter,
+    head east. The attack thrusts the head and spits a poison glob."""
     b = bmp(32, 32)
     viper_wing(b, f, span)
     for y in range(32):
         b[y][16:] = b[y][:16][::-1]
-    ell(b, 16, 9, 2.2, 4, 10)                            # tail, thick at the root, spade tip
-    line(b, 16, 5, 17, 2, 10)
-    line(b, 15, 5, 15, 3, 10)
-    for y in (6, 8, 10):
-        put(b, 15, y, 11)
-        put(b, 16, y, 11)
-    for p in ((16, 0), (17, 0), (15, 1), (16, 1), (17, 1), (18, 1), (16, 2)):
-        put(b, *p, 15)
-    ell(b, 16, 15.5, 4, 5.2, 10)                         # body: a lit spine ridge, dark flanks
-    for y in range(11, 20, 2):
-        put(b, 15, y, 11)
-        put(b, 16, y, 11)
-        put(b, 13, y + 1, 9)
-        put(b, 18, y + 1, 9)
-    for p in ((12, 19), (19, 19), (11, 20), (20, 20)):   # hind claws
-        put(b, *p, 2)
-    rect(b, 14, 19, 17, 21, 10)                          # neck
+    ell(b, 16, 12, 3.2, 6, 2)                            # chest, tapering to the tail
+    ell(b, 16, 17, 2.4, 3.5, 2)
+    rect(b, 15, 2, 16, 6, 2)
+    put(b, 15, 1, 11)
+    put(b, 16, 1, 11)
+    for y in range(3, 21):                               # the segmented glowing spine
+        c = 11 if y % 3 == 0 else 15
+        put(b, 15, y, c)
+        put(b, 16, y, c)
+    for y in range(8, 20, 3):                            # ribs
+        put(b, 14, y, 9)
+        put(b, 17, y, 9)
     dy = 1 if f == 2 else 0
-    ell(b, 16, 23.5 + dy, 3.8, 2.8, 10)                  # head and snout
-    ell(b, 16, 26.5 + dy, 2.4, 1.8, 10)
-    for y in (24, 26):
-        put(b, 15, y + dy, 11)
-        put(b, 16, y + dy, 11)
-    for x, y in ((12, 22), (11, 21), (19, 22), (20, 21)):    # horns swept back
-        put(b, x, y + dy, 15)
+    ell(b, 16, 22.5 + dy, 2.6, 2.5, 2)                   # head
+    rect(b, 15, 21 + dy, 16, 22 + dy, 11)
+    for x, y in ((13, 20), (18, 20)):                    # head spikes
+        put(b, x, y + dy, 11)
     if d != 1:
-        for x, c in ((13, 12), (14, 5), (17, 5), (18, 12)):  # eyes
-            put(b, x, 23 + dy, c)
+        put(b, 14, 23 + dy, 15)                          # eyes and the glowing jaw
+        put(b, 17, 23 + dy, 15)
+        rect(b, 15, 24 + dy, 16, 24 + dy, 11)
     if f == 2:
-        rect(b, 15, 29, 16, 30, 11)                      # the poison glob
-        put(b, 16, 29, 15)
-        put(b, 15, 31, 15)
+        rect(b, 15, 27, 16, 28, 11)                      # the poison glob
+        put(b, 16, 27, 15)
+        put(b, 15, 29, 11)
     b = add_outline(b)
     if d == 1:
         b = b[30::-1] + [[0] * 32]
