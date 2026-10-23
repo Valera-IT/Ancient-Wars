@@ -491,6 +491,14 @@ static inline s16 divs(s32 a, s16 b)
     return (s16)a;
 }
 
+/* 16x16 -> 32 signed multiply with MULS, where gcc cannot see both factors are 16-bit */
+static inline s32 muls(s16 a, s16 b)
+{
+    s32 r = a;
+    __asm__ ("muls.w %2, %0" : "=d"(r) : "0"(r), "d"(b) : "cc");
+    return r;
+}
+
 static inline s16 dist(s16 dx, s16 dy)
 {
     dx = ABS(dx);
@@ -620,13 +628,38 @@ static void clamp_pos(Unit *v)
     if (v->y > FX(WORLD - 16)) v->y = FX(WORLD - 16);
 }
 
-/* move by (mx, my) in 1/16 px, sliding along trees */
+/* standing towers are solid discs: a step that ends inside one is put back on the rim and turned
+   along it, so units walk round instead of through. walk_map marks the cells round tower k with 2 + k. */
+#define BLD_R FX(13)
+static void bld_slide(Unit *v, s16 mx, s16 my)
+{
+    u8 k = walkable(PX(v->x), PX(v->y));
+    Unit *b;
+    s16 dx, dy, d, tx, ty, sp;
+    if (k < 2) return;
+    b = &un[FIRST_BLD + k - 2];
+    if (!b->on) return;
+    dx = v->x - b->x;
+    dy = v->y - b->y;
+    d = dist(dx, dy);
+    if (d >= BLD_R) return;
+    if (d < 8) { dx = 0; dy = BLD_R; d = BLD_R; }
+    tx = -dy;
+    ty = dx;
+    if (muls(mx, tx) + muls(my, ty) < 0) { tx = dy; ty = -dx; }
+    sp = dist(mx, my);
+    v->x = b->x + divs(muls(dx, BLD_R), d) + divs(muls(tx, sp), d);
+    v->y = b->y + divs(muls(dy, BLD_R), d) + divs(muls(ty, sp), d);
+}
+
+/* move by (mx, my) in 1/16 px, sliding along trees and round towers */
 static void step(Unit *v, s16 mx, s16 my)
 {
     s16 nx = v->x + mx, ny = v->y + my;
     if (walkable(PX(nx), PX(ny))) { v->x = nx; v->y = ny; }
     else if (mx && walkable(PX(nx), PX(v->y))) v->x = nx;
     else if (my && walkable(PX(v->x), PX(ny))) v->y = ny;
+    bld_slide(v, mx, my);
     clamp_pos(v);
 }
 
@@ -1004,7 +1037,7 @@ static Proj *proj_homing(u8 src, u8 tgt, u8 kind, s16 dmg, s16 spd)
             p->on = 1; p->kind = kind; p->src = src; p->tgt = tgt; p->dmg = dmg; p->vx = spd; p->t = 0;
             p->st = p->sl = 0;
             p->x = un[src].x;
-            p->y = un[src].y - FX(un[src].type >= U_TOWER ? 6 : 12);
+            p->y = un[src].y - FX(un[src].type == U_TOWER ? 34 : (un[src].type > U_TOWER ? 6 : 12));   /* towers shoot from the orb */
             return p;
         }
     return &spare;
@@ -2154,8 +2187,18 @@ static void bot_cmd(u8 i, Cmd *c)
     /* stand a little behind our creep wave */
     front = creep_front(U->team, l);
     own = bld_lane_s(outer_bld(U->team, l), l);
-    want = front == NO_FRONT ? own + dir * 14 : front - dir * 36;
-    if ((dir > 0 && want < own) || (dir < 0 && want > own)) want = own;   /* never behind our tower */
+    if (front == NO_FRONT) {
+        /* between waves: harass the enemy hero away from its tower, else walk out to meet the next
+           wave (theirs if it is already coming) instead of idling under our tower */
+        if (E->on && ed < 150 && dist(PX(un[et].x) - ex, PX(un[et].y) - ey) > 130 &&
+            divs((s32)U->hp * 100, U->hpmax) + 5 >= divs((s32)E->hp * 100, E->hpmax)) {
+            c->tgt = e;
+            return;
+        }
+        front = creep_front(U->team ^ 1, l);
+        want = front != NO_FRONT ? front - dir * 40 : (own + bld_lane_s(et, l)) >> 1;
+    } else want = front - dir * 36;
+    if ((dir > 0 && want < own + 24) || (dir < 0 && want > own - 24)) want = own + dir * 24;   /* never behind our tower */
     lim = bld_lane_s(et, l) - dir * 148;
     if (!busy && ((dir > 0 && want > lim) || (dir < 0 && want < lim))) want = lim;
     lane_walk(c, i, l, want);
@@ -2786,7 +2829,8 @@ static void draw_scene(void)
                    ATTR(pal, 0, (v->type == U_MELEE ? T_MELEE : T_RANGED) + (sd * 2 + ((v->anim >> 2) & 1)) * 4) | fl);
             break;
         case U_TOWER:
-            de_add(y + 8, x - 16, y - 16, 0x0F, ATTR(pal, 0, T_TOWER));
+            de_add(y + 8, x - 16, y - 40, 0x0F, ATTR(pal, 0, T_TOWER));      /* 32x48: crown and pillar, */
+            de_add(y + 8, x - 16, y - 8, 0x0D, ATTR(pal, 0, T_TOWER_B));    /* then the plinth */
             break;
         default:
             de_add(y + 16, x - 24, y - 24, 0x0A, ATTR(pal, 0, T_ANCIENT));
@@ -2810,7 +2854,7 @@ static void draw_scene(void)
     for (i = FIRST_BLD; i < NU; i++) {
         Unit *v = &un[i];
         if (!v->on || v->hp >= v->hpmax) continue;
-        if (v->type == U_TOWER) unit_bar(PX(v->x) - 12, PX(v->y) - 22, 3, v->hp, v->hpmax, v->team + 2);
+        if (v->type == U_TOWER) unit_bar(PX(v->x) - 12, PX(v->y) - 46, 3, v->hp, v->hpmax, v->team + 2);
         else if (v->type == U_ANCIENT) unit_bar(PX(v->x) - 16, PX(v->y) - 30, 4, v->hp, v->hpmax, v->team + 2);
         else unit_bar(PX(v->x) - 4, PX(v->y) - 16, 1, v->hp, v->hpmax, v->team + 2);
     }

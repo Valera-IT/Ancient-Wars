@@ -1472,24 +1472,63 @@ def ranged_frame(d, f):
 
 # ---------------------------------------------------------------- buildings (top-down)
 def tower():
-    b = bmp(32, 32)
-    for y in range(32):                                   # cast shadow to the bottom-right
+    """a Dota-style guard tower in 3/4 view, 32x48: a stepped stone plinth, a block-built pillar with
+    a team-coloured rune seam and buttresses, and a slab crown whose claws grip a glowing team orb"""
+    b = bmp(32, 48)
+    for y in range(48):                                    # cast shadow on the ground, down-right
         for x in range(32):
-            if 6 <= x - 3 <= 26 and 6 <= y - 3 <= 26 and (x + y) % 2 == 0:
+            dx, dy = (x + 0.5 - 20) / 12, (y + 0.5 - 42) / 5
+            if dx * dx + dy * dy < 1 and (x + y) % 2 == 0:
                 b[y][x] = 1
-    rect(b, 4, 4, 26, 26, 3)
-    rect(b, 4, 4, 26, 5, 4)
-    rect(b, 4, 4, 5, 26, 4)
-    rect(b, 4, 25, 26, 26, 2)
-    rect(b, 25, 4, 26, 26, 2)
-    for k in range(5, 26, 5):                            # crenellations
-        rect(b, k, 2, k + 2, 3, 4)
-        rect(b, k, 27, k + 2, 28, 2)
-        rect(b, 2, k, 3, k + 2, 4)
-        rect(b, 27, k, 28, k + 2, 2)
-    shade_sphere(b, 15.5, 15.5, 8, [2, 3, 4])
-    shade_sphere(b, 15.5, 15.5, 5, [9, 10, 11])
-    disc(b, 14, 14, 1.6, 5)
+    def slab(x0, x1, ytop, depth, front, inset=2):         # a stone step: lit top face, front face
+        for y in range(ytop, ytop + depth):
+            k = (ytop + depth - 1 - y)
+            rect(b, x0 + inset - min(inset, depth - 1 - k), y, x1 - inset + min(inset, depth - 1 - k), y, 4)
+        rect(b, x0, ytop + depth, x1, ytop + depth + front - 1, 3)
+        rect(b, x0, ytop + depth, x0 + 1, ytop + depth + front - 1, 4)
+        rect(b, x1 - 2, ytop + depth, x1, ytop + depth + front - 1, 2)
+        rect(b, x0, ytop + depth + front - 1, x1, ytop + depth + front - 1, 2)
+        for x in range(x0 + 4, x1 - 2, 6):                 # block joints on the front
+            rect(b, x, ytop + depth, x, ytop + depth + front - 2, 2)
+        rect(b, x0 + inset, ytop, x1 - inset, ytop, 5)
+    slab(2, 29, 34, 4, 5)                                  # bottom step
+    slab(6, 25, 30, 3, 3)                                  # upper step
+    for y in range(14, 32):                                # pillar
+        w = 6 + (y - 14) / 9
+        for x in range(round(16 - w), round(16 + w)):
+            t = (x + 0.5 - (16 - w)) / (2 * w)
+            c = 4 if t < 0.25 else (3 if t < 0.7 else 2)
+            if (y - 14) % 6 == 5:
+                c = 2 if t < 0.7 else 1                   # mortar between block courses
+            elif abs(x + 0.5 - (16 - w / 2 if ((y - 14) // 6) % 2 else 16 + w / 2)) < 0.6:
+                c = 2                                      # staggered joints
+            b[y][x] = c
+    for sx, c in ((-1, 3), (1, 2)):                        # buttresses
+        for y in range(22, 32):
+            k = (y - 22) // 3
+            for x in range(16 + sx * 7, 16 + sx * (8 + k) + sx, sx):
+                b[y][x] = c
+        line(b, 16 + sx * 7, 22, 16 + sx * 11, 31, 4 if sx < 0 else 3)
+    for y in range(16, 31):                                # glowing rune seam
+        if (y - 14) % 6 != 5:
+            b[y][15] = 10
+            b[y][16] = 11 if y % 3 else 5
+        else:
+            b[y][15] = b[y][16] = 9
+    slab(5, 26, 10, 2, 3)                                  # crown slab
+    for sx in (-1, 1):                                     # claws curling up round the orb
+        c, hi = (4, 5) if sx < 0 else (2, 3)
+        line(b, 16 + sx * 9, 11, 16 + sx * 10, 5, c, 2)
+        line(b, 16 + sx * 10, 5, 16 + sx * 8, 1, hi, 2)
+        put(b, 16 + sx * 7, 0, hi)
+    line(b, 16, 10, 16, 9, 2)
+    for y in range(48):                                    # a faint glow round the orb
+        for x in range(32):
+            if not b[y][x] and 6.2 < math.hypot(x + 0.5 - 16, y + 0.5 - 6) < 7.4 and (x + y) % 2:
+                b[y][x] = 10
+    shade_sphere(b, 16, 6, 5.5, [9, 10, 11])               # the orb
+    disc(b, 14.5, 4.5, 1.5, 5)
+    put(b, 18, 8, 11)
     return add_outline(b)
 
 
@@ -2173,7 +2212,9 @@ for name, fn in (("T_MELEE", melee_frame), ("T_RANGED", ranged_frame)):
             i = add_sprite(fn(d, f))
             first = first or i
     define(name, first)
-define("T_TOWER", add_sprite(tower()))
+_tw = tower()
+define("T_TOWER", add_sprite(_tw[:32]))          # crown and pillar, 32x32
+define("T_TOWER_B", add_sprite(_tw[32:]))        # plinth, 32x16
 an = ancient()
 define("T_ANCIENT", add_sprite([r[0:24] for r in an[0:24]]))
 add_sprite([r[24:48] for r in an[0:24]])
@@ -2384,6 +2425,13 @@ assert len(tiles) < 1280, len(tiles)
 assert len(tiles) + 1 + 9 * 18 <= 1280, ("draft hero frames overflow into plane A", len(tiles))
 
 walk = [0 if cells[y][x] == TREE else 1 for y in range(N) for x in range(N)]
+for k, (bx, by) in enumerate(BUILDINGS):      # 2 + k: open, but next to tower k, which the game makes solid
+    if k % 7 != 6:
+        for y in range(N):
+            for x in range(N):
+                nx, ny = min(max(bx, x * 16), x * 16 + 15), min(max(by, y * 16), y * 16 + 15)
+                if math.hypot(nx - bx, ny - by) < 14 and walk[y * N + x]:
+                    walk[y * N + x] = 2 + k
 
 
 # creep lanes in pixels, from the Radiant Ancient to the Dire Ancient
@@ -2502,11 +2550,12 @@ if os.environ.get("PREVIEW"):
                     full[ty * 8 + r][tx * 8 + c] = (t[r] >> (28 - c * 4)) & 15
     for k, (bx, by) in enumerate(BUILDINGS):
         bm = an if k % 7 == 6 else tower()
-        h = len(bm)
+        h, w = len(bm), len(bm[0])
+        oy = h // 2 if k % 7 == 6 else 40
         for y in range(h):
-            for x in range(h):
+            for x in range(w):
                 if bm[y][x]:
-                    full[by - h // 2 + y][bx - h // 2 + x] = 15
+                    full[by - oy + y][bx - w // 2 + x] = 15
     save("map", full, PAL_MAP)
     sheet = bmp(9 * 24, 5 * 24 + 16)
     for i in range(6):
@@ -2514,8 +2563,9 @@ if os.environ.get("PREVIEW"):
             sheet[48 + y][i * 16:i * 16 + 16] = row
         for y, row in enumerate(ranged_frame(i // 2, i % 2)):
             sheet[64 + y][i * 16:i * 16 + 16] = row
-    for y, row in enumerate(tower()):
-        sheet[48 + y][100:132] = row
+    for y, row in enumerate(tower()[:48]):
+        if 48 + y < len(sheet):
+            sheet[48 + y][100:132] = row
     for y, row in enumerate(an):
         sheet[48 + y][140:188] = row
     save("units_rad", sheet, PAL_RAD, 4)
