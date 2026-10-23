@@ -328,54 +328,180 @@ def legs(b, d, f, cx, y0, col, foot):
             rect(b, x - 1, y0 + 3 - lift[k], x + 1, y0 + 3 - lift[k], foot)
 
 
+SF_S = [   # top-down, after the Dota 2 / Genesis reference sheet: black armour, swept horns,
+    "                        ",
+    "   #                #   ",
+    "  #h#    #    #    #h#  ",
+    "  #h#   #h#  #h#   #h#  ",
+    "   #h# #h##  ##h# #h#   ",
+    "   #h##hh#h##h#hh##h#   ",
+    "    ##hHhh####hhHh##    ",
+    "  r  #h#rr#hh#rr#h#  r  ",
+    " r  ###hh#DrrD#hh###  r ",
+    "  ##hH##hh#rr#hh##Hh##  ",
+    " #hHh##hH#hrrh#Hh##hHh# ",
+    "#hHh#kr#hh#rr#hh#rk#hHh#",
+    "#hh#kr#hHh#kk#hHh#rk#hh#",
+    "#k#rk #hh#hDDh#hh# kr#k#",
+    "kr#r  #h#hh##hh#h#  r#rk",
+    "r rk  #h#D#hh#D#h#  kr r",
+    " r r  #hD #hh# Dh#  r r ",
+    "   r  #h#  ##  #h#  r   ",
+    "      #kD#    #Dk#      ",
+    "       r        r       ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+]
+SF_N = [   # red eyes and the glowing V down the chest, red flame wisps round the claws
+    "                        ",
+    "   #                #   ",
+    "  #h#    #    #    #h#  ",
+    "  #h#   #h#  #h#   #h#  ",
+    "   #h# #h##  ##h# #h#   ",
+    "   #h##hhhh##hhhh##h#   ",
+    "    ##hHhhhhhhhhHh##    ",
+    "  r  #hhhhh##hhhhh#  r  ",
+    " r  ###hhhh##hhhh###  r ",
+    "  ##hH##hhh##hhh##Hh##  ",
+    " #hHh##hHh#hh#hHh##hHh# ",
+    "#hHh#kr#hh#HH#hh#rk#hHh#",
+    "#hh#kr#hhh#hh#hhh#rk#hh#",
+    "#k#rk #hhh#HH#hhh# kr#k#",
+    "kr#r  #hh#h##h#hh#  r#rk",
+    "r rk  #h#D#hh#D#h#  kr r",
+    " r r  #hD #hh# Dh#  r r ",
+    "   r  #h#  ##  #h#  r   ",
+    "      #kD#    #Dk#      ",
+    "       r        r       ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+]
+SF_E = [   # facing right; mirrored for west
+    "                        ",
+    "         #              ",
+    "        #h#   #         ",
+    "        #h#  #h#        ",
+    "         #h##hh#        ",
+    "         #hhhhh##       ",
+    "        ##hHhh#r#       ",
+    "     r  #hhhh#rr#       ",
+    "    r  ##hhh##D#        ",
+    "     ##hhhH#hhr#        ",
+    "    #hhHh##hhhr#        ",
+    "   #hHh#hHhh#r#  r      ",
+    "   #hh#hhHh#kr#r        ",
+    "  r#k#hhhhh#hh#k r      ",
+    "   r #hhhhh#hhkr        ",
+    "  r  #hh#hh#kr r        ",
+    "     #hh##h# r          ",
+    "     #hh# #h#           ",
+    "     #kD#  #kD#         ",
+    "      r     r           ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+]
+SF_SA = [   # attack: a red claw slash sweeping round the right side
+    "                        ",
+    "   #                #   ",
+    "  #h#    #    #    #h#  ",
+    "  #h#   #h#  #h#   #h#  ",
+    "   #h# #h##  ##h# #h#   ",
+    "   #h##hh#h##h#hh##h#   ",
+    "    ##hHhh####hhHh##    ",
+    "  r  #h#rr#hh#rr#h#  r  ",
+    " r  ###hh#DrrD#hh###  r ",
+    "  ##hH##hh#rr#hh##Hk##  ",
+    " #hHh##hH#hrrh#Hh##hrh# ",
+    "#hHh#kr#hh#rr#hh#rk#hrh#",
+    "#hh#kr#hHh#kk#hHh#rk#kr#",
+    "#k#rk #hh#hDDh#hh# kryr#",
+    "kr#r  #h#hh##hh#h#  rkrk",
+    "r rk  #h#D#hh#D#h#  kr r",
+    " r r  #hD #hh# Dh#  k r ",
+    "   r  #h#  ##  #h# kr   ",
+    "      #kD#    #Dk#      ",
+    "       r        r       ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+]
+SF_NA = [   # attack from behind
+    "                        ",
+    "   #                #   ",
+    "  #h#    #    #    #h#  ",
+    "  #h#   #h#  #h#   #h#  ",
+    "   #h# #h##  ##h# #h#   ",
+    "   #h##hhhh##hhhh##h#   ",
+    "    ##hHhhhhhhhhHh##    ",
+    "  r  #hhhhh##hhhhh#  r  ",
+    " r  ###hhhh##hhhh###  r ",
+    "  ##hH##hhh##hhh##Hk##  ",
+    " #hHh##hHh#hh#hHh##hrh# ",
+    "#hHh#kr#hh#HH#hh#rk#hrh#",
+    "#hh#kr#hhh#hh#hhh#rk#kr#",
+    "#k#rk #hhh#HH#hhh# kryr#",
+    "kr#r  #hh#h##h#hh#  rkrk",
+    "r rk  #h#D#hh#D#h#  kr r",
+    " r r  #hD #hh# Dh#  k r ",
+    "   r  #h#  ##  #h# kr   ",
+    "      #kD#    #Dk#      ",
+    "       r        r       ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+]
+SF_EA = [   # attack to the side
+    "                        ",
+    "         #              ",
+    "        #h#   #         ",
+    "        #h#  #h#        ",
+    "         #h##hh#        ",
+    "         #hhhhh##       ",
+    "        ##hHhh#r#       ",
+    "     r  #hhhh#rr#       ",
+    "    r  ##hhh##D#        ",
+    "     ##hhhH#hhr#k       ",
+    "    #hhHh##hhhr# r      ",
+    "   #hHh#hHhh#r#  rr     ",
+    "   #hh#hhHh#kr#r  kr    ",
+    "  r#k#hhhhh#hh#k rry    ",
+    "   r #hhhhh#hhkr  kr    ",
+    "  r  #hh#hh#kr r  r     ",
+    "     #hh##h# r   k      ",
+    "     #hh# #h#           ",
+    "     #kD#  #kD#         ",
+    "      r     r           ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+]
+
+
+SF_COLS = {"#": 1, "h": 2, "H": 3, "D": 13, "k": 14, "r": 12, "y": 15}
+
+
 def sf_frame(d, f):
+    """Shadow Fiend from above; the walk step bobs a pixel and flickers the flame wisps."""
+    rows = ((SF_S, SF_N, SF_E) if f < 2 else (SF_SA, SF_NA, SF_EA))[d]
     b = bmp(24, 24)
     shadow(b, 12, 21, 8, 3)
-    bob = 1 if f == 1 else 0
-    # tattered cloak trailing behind
-    for y in range(12, 22):
-        w = 3 + (y - 12) // 2
-        for x in range(12 - w, 12 + w + 1):
-            if (x * 3 + y + f) % 7 or y < 19:
-                put(b, x + (-2 if d == 2 else 0), y, 13)
-    legs(b, d, f, 12, 17, 13, 2)
-    ell(b, 12, 13 + bob, 5, 5, 14 if d != 1 else 13)
-    rect(b, 8, 11 + bob, 16, 12 + bob, 9)           # team-coloured mantle
-    put(b, 8, 11 + bob, 11)
-    ell(b, 12 + (2 if d == 2 else 0), 7 + bob, 3.6, 3.6, 13)
-    # horns
-    for k in range(4):
-        put(b, 9 - k // 2 + (2 if d == 2 else 0), 4 + bob - k, 4)
-        put(b, 15 + k // 2 + (2 if d == 2 else 0), 4 + bob - k, 4)
-    if d == 0:
-        put(b, 11, 7 + bob, 12)
-        put(b, 13, 7 + bob, 12)
-        put(b, 12, 14 + bob, 15)
-    elif d == 2:
-        put(b, 15, 7 + bob, 12)
-    # arms / soul hand
-    if f == 2:
-        if d == 0:
-            line(b, 15, 13, 17, 19, 14, 2)
-            disc(b, 17.5, 20.5, 2, 15)
-            put(b, 17, 20, 5)
-        elif d == 1:
-            line(b, 15, 12, 17, 5, 14, 2)
-            disc(b, 17.5, 3.5, 2, 15)
-        else:
-            line(b, 15, 12, 21, 12, 14, 2)
-            disc(b, 21.5, 12.5, 2, 15)
-            put(b, 21, 12, 5)
-    else:
-        sw = 1 if f == 1 else 0
-        if d == 2:
-            line(b, 13, 12, 14 + sw, 17, 14, 2)
-        else:
-            line(b, 7, 12 + bob, 6, 17 - sw, 14, 2)
-            line(b, 17, 12 + bob, 18, 16 + sw, 14, 2)
-            put(b, 6, 18 - sw, 15)
-            put(b, 18, 17 + sw, 15)
-    return add_outline(b)
+    dy = 1 if f == 1 else 0
+    for y, r in enumerate(rows):
+        for x, ch in enumerate(r):
+            if ch != " " and y + dy < 24:
+                if f == 1 and ch in "rk":
+                    ch = "k" if ch == "r" else "r"
+                b[y + dy][x] = SF_COLS[ch]
+    return b
 
 
 def flesh(b, cx, cy, r, rx=None, ry=None):
