@@ -312,7 +312,7 @@ def hflip(b):
 
 
 # ---------------------------------------------------------------- heroes (24x24, 3/4 top-down)
-# dirs: 0 = down (south), 1 = up (north), 2 = side (east; west is h-flipped)
+# dirs: 0 = down (south), 1 = up (north), 2 = side (east; west is h-flipped); hero32 adds the diagonals
 # frames: 0/1 = walk, 2 = attack
 def legs(b, d, f, cx, y0, col, foot):
     if d == 2:
@@ -535,11 +535,12 @@ SF_EA = [   # attack to the side
 SF_COLS = {"#": 1, "h": 2, "H": 3, "D": 13, "k": 14, "r": 12, "y": 15}
 
 
-def sf_frame(d, f):
+def sf_frame(d, f, sh=True):
     """Shadow Fiend from above; the walk step bobs a pixel and flickers the flame wisps."""
     rows = ((SF_S, SF_N, SF_E) if f < 2 else (SF_SA, SF_NA, SF_EA))[d]
     b = bmp(32, 32)
-    shadow(b, 16, 28, 10, 3.5)
+    if sh:
+        shadow(b, 16, 28, 10, 3.5)
     dy = 1 if f == 1 else 0
     for y, r in enumerate(rows):
         for x, ch in enumerate(r):
@@ -771,18 +772,100 @@ PUDGE_COLS = {"#": 1, "S": 6, "s": 7, "k": 14, "D": 13, "G": 10, "g": 9, "W": 5,
               "H": 3, "h": 2, "y": 15}
 
 
-def pudge_frame(d, f):
+def pudge_frame(d, f, sh=True):
     """The Butcher seen from above, after the Dota 2 / Genesis top-down reference sheet. The green
     crest and trousers are team colour 9-10; the walk step bobs the body a pixel."""
     rows = ((PUDGE_S, PUDGE_N, PUDGE_E) if f < 2 else (PUDGE_SA, PUDGE_NA, PUDGE_EA))[d]
     b = bmp(32, 32)
-    shadow(b, 16, 28, 11, 3.5)
+    if sh:
+        shadow(b, 16, 28, 11, 3.5)
     dy = 1 if f == 1 else 0
     for y, r in enumerate(rows):
         for x, ch in enumerate(r):
             if ch != " " and y + dy < 32:
                 b[y + dy][x] = PUDGE_COLS[ch]
     return b
+
+
+def viper_wing(b, f, span=1.0):
+    """Viper's left wing from above: dark membrane on three finger bones, the leading edge lit;
+    the walk step pulls the tips in and up (a flap), the attack lifts them"""
+    sx, sy = 13, 12
+    k, lift = {0: (1.0, 0), 1: (0.72, -1), 2: (1.0, -1)}[f]
+    k *= span
+
+    def P(x, y):
+        return round(sx + (x - sx) * k), round(sy + (y - sy) * k + lift)
+
+    elbow, tip, f2, f3 = P(8, 5), P(1, 2.5), P(0.5, 10), P(4, 17)
+    mem = [(sx, sy - 1), elbow, tip, P(3, 6), f2, P(4, 11.5), P(5.5, 13), f3, P(8, 15), P(10, 15), (12, 17), (14, 16)]
+    for y in range(32):
+        for x in range(16):
+            if point_in_poly(x + 0.5, y + 0.5, mem):
+                b[y][x] = 9
+    line(b, sx, sy, *P(8, 6), 10)
+    line(b, *P(8, 6), *P(2, 3.5), 10)
+    line(b, sx, sy - 1, *elbow, 11)
+    line(b, *elbow, *tip, 11)
+    line(b, *elbow, *f2, 10)
+    line(b, *elbow, *f3, 10)
+    for p in (tip, P(8, 4), f2, f3):                     # yellow claws on the wing joints
+        put(b, *p, 15)
+
+
+def viper_frame(d, f, sh=True, span=1.0):
+    """Viper, the netherdrake, from above: a green wyvern (team colour 9-11, so Dire's is red) with
+    wings spread, head to the front and tail behind. North is the south pose turned round without
+    the face; the side pose is it turned a quarter, head east. The attack spits a poison glob."""
+    b = bmp(32, 32)
+    viper_wing(b, f, span)
+    for y in range(32):
+        b[y][16:] = b[y][:16][::-1]
+    ell(b, 16, 9, 2.2, 4, 10)                            # tail, thick at the root, spade tip
+    line(b, 16, 5, 17, 2, 10)
+    line(b, 15, 5, 15, 3, 10)
+    for y in (6, 8, 10):
+        put(b, 15, y, 11)
+        put(b, 16, y, 11)
+    for p in ((16, 0), (17, 0), (15, 1), (16, 1), (17, 1), (18, 1), (16, 2)):
+        put(b, *p, 15)
+    ell(b, 16, 15.5, 4, 5.2, 10)                         # body: a lit spine ridge, dark flanks
+    for y in range(11, 20, 2):
+        put(b, 15, y, 11)
+        put(b, 16, y, 11)
+        put(b, 13, y + 1, 9)
+        put(b, 18, y + 1, 9)
+    for p in ((12, 19), (19, 19), (11, 20), (20, 20)):   # hind claws
+        put(b, *p, 2)
+    rect(b, 14, 19, 17, 21, 10)                          # neck
+    dy = 1 if f == 2 else 0
+    ell(b, 16, 23.5 + dy, 3.8, 2.8, 10)                  # head and snout
+    ell(b, 16, 26.5 + dy, 2.4, 1.8, 10)
+    for y in (24, 26):
+        put(b, 15, y + dy, 11)
+        put(b, 16, y + dy, 11)
+    for x, y in ((12, 22), (11, 21), (19, 22), (20, 21)):    # horns swept back
+        put(b, x, y + dy, 15)
+    if d != 1:
+        for x, c in ((13, 12), (14, 5), (17, 5), (18, 12)):  # eyes
+            put(b, x, 23 + dy, c)
+    if f == 2:
+        rect(b, 15, 29, 16, 30, 11)                      # the poison glob
+        put(b, 16, 29, 15)
+        put(b, 15, 31, 15)
+    b = add_outline(b)
+    if d == 1:
+        b = b[30::-1] + [[0] * 32]
+    elif d == 2:
+        b = [[b[x][31 - y] for x in range(32)] for y in range(32)]
+    o = bmp(32, 32)
+    if sh:
+        shadow(o, 16, 28, 10, 3.5)
+    for y in range(32):
+        for x in range(32):
+            if b[y][x]:
+                o[y][x] = b[y][x]
+    return o
 
 
 def axe_frame(d, f):
@@ -1008,7 +1091,6 @@ HERO_SPECS = {
     "lina": dict(skin=6, body=12, robe=True, trim=15, hair=15, style="flame", glow=15),
     "cm": dict(skin=6, body=8, robe=True, trim=5, hair=5, style="hood", weapon="staff", wcol=4, glow=5),
     "drow": dict(skin=8, body=13, legs_c=13, hair=5, style="long", weapon="bow", wcol=6),
-    "lion": dict(skin=3, body=2, robe=True, trim=12, hair=2, style="horns", glow=12),
     "jugg": dict(skin=6, body=6, legs_c=15, hair=12, style="mask", weapon="sword"),
 }
 
@@ -1328,7 +1410,7 @@ SKILL_ICONS = [
     [("flame", 12, 15, 15), ("ring", 12, 15, 5, 5, 1), ("flame", 15, 15, 5, 5, 2), ("bolt", 12, 15, 5, 5, 1)],  # Lina
     [("flake", 8, 5), ("flake", 5, 8, 5, 5, 2), ("star", 8, 5, 5, 5, 2), ("flake", 5, 5, 5, 5, 1)],       # CM
     [("arrow", 8, 5, 3), ("wind", 8, 5), ("arrows", 4, 5, 3, 5, 2), ("cross", 8, 5, 5, 5, 1)],            # Drow
-    [("spike", 3, 4, 6, 5, 2), ("frog", 7, 7, 1), ("drop", 8, 8, 5), ("hand", 14, 12, 5, 5, 1)],          # Lion
+    [("drop", 10, 11, 15), ("cloud", 9, 10, 11, 5, 2), ("heart", 9, 10, 15, 5, 2), ("claw", 10, 11, 15, 5, 1)],  # Viper
     [("spiral", 15, 5, 5, 5, 2), ("plus", 7, 7), ("swords", 4, 5, 15), ("blade", 8, 5, 15, 6, 1)],        # Jugg
 ]
 ITEM_ICONS = [("boot", 1, 6, 15, 5, 2), ("blade", 3, 5, 15, 6, 2), ("heart", 13, 7, 5, 5, 2), ("blade", 8, 5, 15, 6, 13),
@@ -1783,7 +1865,7 @@ define("T_ORB_CREEP", add_sprite(orb(10, 11)))
 define("T_ORB_TOWER", add_sprite(orb(15, 5, 5, 3.5)))
 define("T_ORB_ICE", add_sprite(orb(8, 5)))
 define("T_ORB_FIRE", add_sprite(orb(12, 15)))
-define("T_ORB_DARK", add_sprite(orb(13, 12, 12, 2.6)))
+define("T_ORB_POISON", add_sprite(orb(9, 11, 10, 2.6)))
 define("T_HOOK", add_sprite(hook_head()))
 define("T_CHAIN", add_sprite(chain_link()))
 define("T_ROT", add_sprite(rot_puff()))
@@ -1835,12 +1917,90 @@ sprite_tiles = len(tiles)
 
 # heroes live in ROM only: the game copies the four in play into VRAM slots after GFX_TILES
 HERO_FNS = [sf_frame, pudge_frame, axe_frame] + [spec_frame(n) for n in
-            ("sniper", "zeus", "lina", "cm", "drow", "lion", "jugg")]
-PORT_ORG = {pudge_frame: (4, 2), sf_frame: (4, 2)}   # art drawn at 32x32 names where its 24x24 HUD portrait is cut
+            ("sniper", "zeus", "lina", "cm", "drow")] + [viper_frame, spec_frame("jugg")]
+PORT_ORG = {pudge_frame: (4, 2), sf_frame: (4, 2), viper_frame: (4, 7)}   # art drawn at 32x32 names where its 24x24 HUD portrait is cut
+
+
+def scale2x(b):
+    """EPX: doubles pixel art keeping its edges sharp"""
+    h, w = len(b), len(b[0])
+    o = bmp(2 * w, 2 * h)
+    for y in range(h):
+        for x in range(w):
+            p = b[y][x]
+            a = b[y - 1][x] if y else p
+            c = b[y][x - 1] if x else p
+            r = b[y][x + 1] if x < w - 1 else p
+            d = b[y + 1][x] if y < h - 1 else p
+            o[2 * y][2 * x] = c if c == a and c != d and a != r else p
+            o[2 * y][2 * x + 1] = a if a == r and a != c and r != d else p
+            o[2 * y + 1][2 * x] = c if d == c and d != r and c != a else p
+            o[2 * y + 1][2 * x + 1] = r if r == d and r != a and d != c else p
+    return o
+
+
+def strip_outline(b, c=1):
+    """drops the outline (and dithered shadow) pixels that touch the empty background"""
+    h, w = len(b), len(b[0])
+    o = [r[:] for r in b]
+    for y in range(h):
+        for x in range(w):
+            if b[y][x] == c and any(not (0 <= x + dx < w and 0 <= y + dy < h) or b[y + dy][x + dx] == 0
+                                    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
+                o[y][x] = 0
+    return o
+
+
+def rotate45(b, cw, cx=16, cy=15):
+    """RotSprite-style: scale up 8x with EPX, then sample the centre of every pixel turned 45 degrees"""
+    u = scale2x(scale2x(scale2x(b)))
+    t = 0.70710678 * (-1 if cw else 1)
+    o = bmp(32, 32)
+    for y in range(32):
+        for x in range(32):
+            px, py = x + 0.5 - cx, y + 0.5 - cy
+            sx, sy = cx + 0.70710678 * px - t * py, cy + t * px + 0.70710678 * py
+            if 0 <= sx < 32 and 0 <= sy < 32:
+                o[y][x] = u[int(sy * 8)][int(sx * 8)]
+    return o
+
+
+def half_turn(b, k=0.7, shift=2, c=16):
+    """a front or back pose turned halfway to the east: the screen-left (far) side squeezes to the
+    middle and the middle moves right"""
+    u = scale2x(scale2x(b))
+    o = bmp(32, 32)
+    for y in range(32):
+        for x in range(32):
+            X = x + 0.5
+            sx = c + (X - c - shift) / k if X < c + shift else X - shift
+            if 0 <= sx < 32:
+                o[y][x] = u[y * 4 + 1][int(sx * 4)]
+    return o
+
+
+TOP_DOWN = {viper_frame}   # seen straight from above: its diagonals are the pose turned 45 degrees
 
 
 def hero32(fn, d, f):
-    """a hero pose on its 32x32 sprite; older 24x24 art sits centred with its feet where they were"""
+    """a hero pose on its 32x32 sprite; d 3/4 are the diagonals south-east and north-east, made from
+    the south and north poses. Older 24x24 art sits centred with its feet where they were"""
+    if d >= 3:
+        if fn in TOP_DOWN:
+            b = rotate45(fn(d - 3, f, sh=False, span=0.82), d == 4)
+        else:
+            b = half_turn(strip_outline(hero32(fn, d - 3, f)))
+        b = add_outline(b)
+        o = bmp(32, 32)
+        if len(fn(0, 0)) == 32:
+            shadow(o, 16, 28, 10, 3.5)
+        else:
+            shadow(o, 16, 27, 8, 3)
+        for y in range(32):
+            for x in range(32):
+                if b[y][x]:
+                    o[y][x] = b[y][x]
+        return o
     b = fn(d, f)
     if len(b) == 32:
         return b
@@ -1852,7 +2012,7 @@ def hero32(fn, d, f):
 
 hero_tiles, hero_port = [], []
 for fn in HERO_FNS:
-    for d in range(3):
+    for d in range(5):
         for f in range(3):
             b = hero32(fn, d, f)
             for tx in range(4):
@@ -2049,9 +2209,9 @@ if os.environ.get("PREVIEW"):
         sheet[48 + y][140:188] = row
     save("units_rad", sheet, PAL_RAD, 4)
     save("units_dire", sheet, PAL_DIRE, 4)
-    heroes = bmp(9 * 32, len(HERO_FNS) * 32)
+    heroes = bmp(15 * 32, len(HERO_FNS) * 32)
     for h, fn in enumerate(HERO_FNS):
-        for i in range(9):
+        for i in range(15):
             for y, row in enumerate(hero32(fn, i // 3, i % 3)):
                 heroes[h * 32 + y][i * 32:i * 32 + 32] = row
     save("heroes_rad", heroes, PAL_RAD, 4)

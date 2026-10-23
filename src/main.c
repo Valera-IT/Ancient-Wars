@@ -72,7 +72,7 @@ static void vdp_init(void)
     for (i = 0; i < GFX_TILES * 8; i++) VDP_DATA32 = gfx_tiles[i];
 }
 
-/* hero sprites stay in ROM (9 poses of 4x4 tiles each); the ones in play get a pose slot after the other graphics */
+/* hero sprites stay in ROM (15 poses of 4x4 tiles each); the ones in play get a pose slot after the other graphics */
 #define T_HSLOT (GFX_TILES + 1)
 #define T_SKI (T_HSLOT + 16 * NH)    /* the HUD hero's four ability icons, 2x2 tiles each */
 #define T_PORT (T_SKI + 16)          /* and its portrait, 3x3 */
@@ -84,7 +84,7 @@ static void hero_tiles(u8 kind, u8 first, u8 n, u16 dst)
 {
     const u32 *src = hero_art + (first << 3);
     u16 k;
-    while (kind--) src += 144 * 8;
+    while (kind--) src += 240 * 8;
     VDP_CTRL32 = VRAM_W(dst << 5);
     for (k = (u16)n << 3; k; k--) VDP_DATA32 = *src++;
 }
@@ -398,7 +398,7 @@ static u8 walkable(s16 x, s16 y)
 
 /* ================================================================ game data */
 enum { U_HERO, U_MELEE, U_RANGED, U_TOWER, U_ANCIENT };
-enum { PJ_SF, PJ_CREEP, PJ_TOWER, PJ_BULLET, PJ_ICE, PJ_FIRE, PJ_DARK, PJ_REQ, PJ_LFIRE, PJ_LROCK };  /* REQ on: lines */
+enum { PJ_SF, PJ_CREEP, PJ_TOWER, PJ_BULLET, PJ_ICE, PJ_FIRE, PJ_POISON, PJ_REQ, PJ_LFIRE, PJ_LROCK };  /* REQ on: lines */
 enum { FX_RAZE, FX_SPARK, FX_POOF, FX_DENY, FX_GOLD, FX_RING, FX_HELIX, FX_DMG, FX_FIRE, FX_ICE, FX_BOLT };
 enum { IT_BOOTS = 1, IT_BLADES = 2, IT_VIT = 4, IT_BLINK = 8, IT_BRACER = 16 };
 #define NITEM 5
@@ -408,7 +408,7 @@ enum { IT_BOOTS = 1, IT_BLADES = 2, IT_VIT = 4, IT_BLINK = 8, IT_BRACER = 16 };
 
 /* hero slots: even = Radiant, odd = Dire (team = slot & 1), so i ^ 1 is an enemy hero; slots 2 and 3
    are used in 2v2 only. hk[] says which hero plays in each */
-enum { K_SF, K_PUDGE, K_AXE, K_SNIPER, K_ZEUS, K_LINA, K_CM, K_DROW, K_LION, K_JUGG, NHERO };
+enum { K_SF, K_PUDGE, K_AXE, K_SNIPER, K_ZEUS, K_LINA, K_CM, K_DROW, K_VIPER, K_JUGG, NHERO };
 #define K_GEN K_SNIPER     /* heroes from here on use the table-driven skills (skdef) */
 #define NH 6                     /* hero slots: Radiant 0, 2, 4 and Dire 1, 3, 5 */
 #define FIRST_BLD NH
@@ -670,20 +670,20 @@ static void msg(const char *s, u8 t)
 /* skills: SF = Shadowraze, Necromastery, Presence, Requiem; Pudge = Hook, Rot, Flesh Heap, Dismember;
    Axe = Berserker's Call, Battle Hunger, Counter Helix, Culling Blade; the rest are in skdef */
 static const char *const hero_name[NHERO] = { "SHADOW FIEND", "PUDGE", "AXE", "SNIPER", "ZEUS", "LINA",
-                                              "CRYSTAL MAIDEN", "DROW RANGER", "LION", "JUGGERNAUT" };
+                                              "CRYSTAL MAIDEN", "DROW RANGER", "VIPER", "JUGGERNAUT" };
 static const char *const hero_short[NHERO] = { "SF   ", "PUDGE", "AXE  ", "SNIPR", "ZEUS ", "LINA ",
-                                               "CM   ", "DROW ", "LION ", "JUGG " };
+                                               "CM   ", "DROW ", "VIPER", "JUGG " };
 /* base values and per-level growth */
-static const s16 st_hp[NHERO] = { 460, 600, 620, 530, 450, 440, 470, 450, 490, 580 };
-static const u8 st_hpl[NHERO] = { 46, 62, 66, 50, 44, 42, 44, 42, 44, 58 };
-static const s16 st_mp[NHERO] = { 230, 190, 180, 220, 300, 280, 300, 220, 290, 200 };
-static const u8 st_mpl[NHERO] = { 26, 20, 18, 24, 32, 30, 30, 22, 30, 20 };
-static const u8 st_dmg[NHERO] = { 30, 44, 42, 37, 28, 32, 28, 30, 30, 40 };
+static const s16 st_hp[NHERO] = { 460, 600, 620, 530, 450, 440, 470, 450, 500, 580 };
+static const u8 st_hpl[NHERO] = { 46, 62, 66, 50, 44, 42, 44, 42, 48, 58 };
+static const s16 st_mp[NHERO] = { 230, 190, 180, 220, 300, 280, 300, 220, 230, 200 };
+static const u8 st_mpl[NHERO] = { 26, 20, 18, 24, 32, 30, 30, 22, 24, 20 };
+static const u8 st_dmg[NHERO] = { 30, 44, 42, 37, 28, 32, 28, 30, 34, 40 };
 static const u8 st_dml[NHERO] = { 3, 4, 4, 4, 3, 3, 3, 4, 3, 4 };
-static const u8 st_rng[NHERO] = { 80, 20, 20, 96, 72, 76, 70, 90, 72, 20 };
-static const u8 st_spd[NHERO] = { 21, 19, 22, 20, 20, 21, 19, 21, 20, 23 };
-static const u8 st_rate[NHERO] = { 50, 56, 54, 52, 56, 54, 58, 52, 56, 50 };
-static const u8 st_pj[NHERO] = { PJ_SF, 0, 0, PJ_BULLET, PJ_ICE, PJ_FIRE, PJ_ICE, PJ_ICE, PJ_DARK, 0 };
+static const u8 st_rng[NHERO] = { 80, 20, 20, 96, 72, 76, 70, 90, 80, 20 };
+static const u8 st_spd[NHERO] = { 21, 19, 22, 20, 20, 21, 19, 21, 21, 23 };
+static const u8 st_rate[NHERO] = { 50, 56, 54, 52, 56, 54, 58, 52, 52, 50 };
+static const u8 st_pj[NHERO] = { PJ_SF, 0, 0, PJ_BULLET, PJ_ICE, PJ_FIRE, PJ_ICE, PJ_ICE, PJ_POISON, 0 };
 
 /* table-driven skills. cd is in units of 16 frames; dmg = base + per * level; for SK_LINE range is
    the flight time in frames (3 px each) and rad the hit radius; pj = a homing projectile for SK_NUKE */
@@ -700,8 +700,8 @@ static const SkDef skdef[NHERO - K_GEN][4] = {
       { SK_PASSIVE }, { SK_CHAN, 200, 150, 0, 70, 18, 12, 0, 30, FX_ICE, 0 } },                      /* Crystal Maiden */
     { { SK_PASSIVE }, { SK_AREA, 90, 38, 40, 34, 20, 20, 24, 60, FX_POOF, 0 },
       { SK_AREA, 70, 30, 72, 36, 30, 25, 0, 90, FX_ICE, 0 }, { SK_PASSIVE } },                       /* Drow Ranger */
-    { { SK_LINE, 100, 38, 40, 14, 60, 45, 36, 0, FX_POOF, PJ_LROCK }, { SK_NUKE, 110, 53, 80, 0, 0, 0, 48, 0, FX_POOF, 0 },
-      { SK_DRAIN, 10, 23, 80, 0, 40, 30, 0, 0, FX_SPARK, 0 }, { SK_NUKE, 200, 131, 90, 0, 240, 120, 0, 0, FX_RAZE, 0 } },
+    { { SK_PASSIVE }, { SK_AREA, 70, 30, 70, 30, 40, 30, 0, 90, FX_POOF, 0 },
+      { SK_PASSIVE }, { SK_NUKE, 125, 70, 90, 0, 150, 100, 0, 160, FX_POOF, 0 } },                    /* Viper */
     { { SK_BUFF, 100, 56, 0, 36, 12, 7, 0, 0, FX_HELIX, 0 }, { SK_HEAL, 80, 94, 0, 80, 4, 2, 0, 0, FX_SPARK, 0 },
       { SK_PASSIVE }, { SK_OMNI, 200, 131, 70, 0, 70, 0, 0, 0, FX_HELIX, 0 } },                      /* Juggernaut */
 };
@@ -727,7 +727,7 @@ static void hero_poses(void)
         if (pose_want[k] != pose_have[k]) {
             const u32 *src = hero_art + times(128, pose_want[k]);      /* 16 tiles of 8 longs a pose */
             u8 j;
-            for (j = hk[k]; j; j--) src += 144 * 8;
+            for (j = hk[k]; j; j--) src += 240 * 8;
             pose_have[k] = pose_want[k];
             if ((((u32)src) & 0x1FFFF) + 512 > 0x20000) {       /* DMA can't cross a 128K boundary */
                 u16 w;
@@ -1092,6 +1092,10 @@ static void deliver(u8 i, u8 t)
             st = 8;
         }
         if (hk[i] == K_DROW && hr[i].sk[0]) sl = 40;                            /* Frost Arrows */
+        if (hk[i] == K_VIPER && hr[i].sk[0]) {                                  /* Poison Attack */
+            d += hr[i].sk[0] << 2;
+            sl = 24 + (hr[i].sk[0] << 3);
+        }
         if (hk[i] == K_JUGG && l && (rnd() & 7) < l) {                          /* Blade Dance */
             d <<= 1;
         }
@@ -1101,6 +1105,10 @@ static void deliver(u8 i, u8 t)
             p->sl = sl;
         } else hurt(i, t, d);
     }
+    }
+    if (t < NH && hk[t] == K_VIPER && hr[t].sk[2] && un[i].type < U_TOWER) {     /* Corrosive Skin */
+        stun_slow(i, 0, 30);
+        hurt(t, i, times(4, hr[t].sk[2]));
     }
 }
 
@@ -2319,7 +2327,7 @@ static const char *const skill_name[NHERO][4] = {
     { "DRAGON SLAVE    ", "LIGHT STRIKE    ", "FIERY SOUL      ", "LAGUNA BLADE    " },
     { "CRYSTAL NOVA    ", "FROSTBITE       ", "ARCANE AURA     ", "FREEZING FIELD  " },
     { "FROST ARROWS    ", "GUST            ", "MULTISHOT       ", "MARKSMANSHIP    " },
-    { "EARTH SPIKE     ", "HEX             ", "MANA DRAIN      ", "FINGER OF DEATH " },
+    { "POISON ATTACK   ", "NETHERTOXIN     ", "CORROSIVE SKIN  ", "VIPER STRIKE    " },
     { "BLADE FURY      ", "HEALING WARD    ", "BLADE DANCE     ", "OMNISLASH       " } };
 
 /* ------------------------------------------------------------- split-screen HUD: 20 columns per player */
@@ -2717,6 +2725,7 @@ static void unit_bar(s16 x, s16 y, u8 cells, s16 hp, s16 hpmax, u8 pal)
 
 /* sprite direction for a facing: 0 = down, 1 = up, 2 = side; flip for the west half */
 static const u8 sdir_of[8] = { 2, 0, 0, 0, 2, 1, 1, 1 };
+static const u8 hdir_of[8] = { 2, 3, 0, 3, 2, 4, 1, 4 };   /* heroes: S, N, E, SE, NE; the west half h-flipped */
 
 static void draw_minimap(void)
 {
@@ -2756,7 +2765,13 @@ static void draw_scene(void)
             u8 f = (v->wind || H->chan_t || H->cast_lock || H->hook_st == 1) ? 2 : ((v->anim >> 3) & 1);
             if (v->stun && (vcount & 4)) break;
             if (v->hunger && (vcount & 8)) pal ^= 1;
-            if (H->buf_t) { sd = sdir_of[(vcount >> 2) & 7]; f = 2; }        /* Blade Fury spin */
+            sd = hdir_of[v->face & 7];
+            if (H->buf_t) {                                                 /* Blade Fury spin */
+                u8 a = (vcount >> 2) & 7;
+                sd = hdir_of[a];
+                fl = a >= 3 && a <= 5 ? HFLIP : 0;
+                f = 2;
+            }
             pose_want[i] = sd * 3 + f;
             de_add(y, x - 16, y - 26, 0x0F, ATTR(pal, 0, T_HSLOT + times(16, i)) | fl);
             break;
@@ -2834,7 +2849,7 @@ static void draw_scene(void)
         case PJ_BULLET: wspr(PX(p->x) - 4, PX(p->y) - 4, 0, ATTR(pal, 0, T_ORB_TOWER)); break;
         case PJ_ICE: wspr(PX(p->x) - 4, PX(p->y) - 4, 0, ATTR(pal, 0, T_ORB_ICE)); break;
         case PJ_FIRE: wspr(PX(p->x) - 4, PX(p->y) - 4, 0, ATTR(pal, 0, T_ORB_FIRE)); break;
-        case PJ_DARK: wspr(PX(p->x) - 4, PX(p->y) - 4, 0, ATTR(pal, 0, T_ORB_DARK)); break;
+        case PJ_POISON: wspr(PX(p->x) - 4, PX(p->y) - 4, 0, ATTR(pal, 0, T_ORB_POISON)); break;
         case PJ_LFIRE: wspr(PX(p->x) - 12, PX(p->y) - 12, 0x0A, ATTR(2, 0, T_FIRE + 9 + ((p->t >> 2) & 1) * 9)); break;
         case PJ_LROCK: wspr(PX(p->x) - 4, PX(p->y), 0, ATTR(2, 0, T_SPARK)); break;
         default: wspr(PX(p->x) - 8, PX(p->y) - 8, 0x05, ATTR(pal, 0, T_SOUL));
@@ -3116,7 +3131,7 @@ static u8 draft(void)
 {
     static const char *const role[NHERO] = { "RANGED CARRY", "MELEE DISABLER", "MELEE INITIATOR", "RANGED CARRY",
                                              "RANGED NUKER", "RANGED NUKER", "RANGED SUPPORT", "RANGED CARRY",
-                                             "RANGED DISABLER", "MELEE CARRY" };
+                                             "RANGED CARRY", "MELEE CARRY" };
     static const char *const label[6] = { "YOU    ", "ENEMY  ", "ALLY   ", "ENEMY 2", "ALLY 2 ", "ENEMY 3" };
     static const char *const title[2][6] = { { "PICK YOUR HERO", "PICK THE ENEMY HERO", "PICK YOUR ALLY",
                                                "PICK THE SECOND ENEMY", "PICK YOUR SECOND ALLY", "PICK THE THIRD ENEMY" },
