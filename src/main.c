@@ -440,13 +440,14 @@ typedef struct {
     u8 call_t, helix_cd;
     u8 hold_k, hold_t;  /* a skill key held down to learn that skill (255 = none), frames held */
     u8 stat, at[3], rate;   /* points in +1 to all attributes; STR, AGI, INT now; attack frames */
+    s16 arm, amul;      /* armor in tenths; what an attack on the hero keeps, of 256 */
     u8 buf_t, heal_t, omni_n;   /* Blade Fury and Healing Ward frames left; Omnislash jumps left */
     u8 chan_t, chan_kind, hook_st, hook_t, ai_st, cast_lock, ai_lane, ai_t;
     s8 chan_tgt, hook_tgt;
 } Hero;
 
 typedef struct { s8 mvx, mvy, tgt; u8 cast, aim, face; s16 ax, ay; } Cmd;
-typedef struct { s16 x, y, vx, vy, dmg; s8 tgt, src; u8 on, kind, t, life, st, sl; } Proj;  /* st/sl: stun, slow on hit */
+typedef struct { s16 x, y, vx, vy, dmg; s8 tgt, src; u8 on, kind, t, life, st, sl, ph; } Proj;  /* st/sl: stun, slow on hit; ph: an attack */
 typedef struct { s16 x, y; u16 val; u8 on, kind, t; } Fx;
 
 static Unit un[NU];
@@ -715,10 +716,12 @@ static const u8 st_dmg[NHERO] = { 30, 44, 42, 37, 28, 32, 28, 30, 34, 40 };
 /* Dota attributes: STR, AGI, INT at level 1 and their gain a level in tenths, the primary one.
    Above level 1 each STR is +20 HP, each INT +12 mana, each AGI +1% attack speed and each
    point of the primary attribute +1 damage; the st_ tables are the level 1 values */
-static const u8 at_base[NHERO][3] = { { 19, 20, 18 }, { 25, 14, 16 }, { 25, 20, 18 }, { 19, 21, 15 }, { 19, 11, 22 },
-                                      { 18, 23, 27 }, { 18, 16, 18 }, { 18, 22, 15 }, { 20, 21, 15 }, { 20, 26, 14 } };
-static const u8 at_gain[NHERO][3] = { { 27, 35, 22 }, { 30, 14, 18 }, { 28, 17, 16 }, { 20, 34, 26 }, { 21, 12, 33 },
-                                      { 22, 18, 32 }, { 22, 16, 33 }, { 19, 30, 14 }, { 24, 30, 18 }, { 22, 28, 14 } };
+static const u8 at_base[NHERO][3] = { { 19, 25, 16 }, { 25, 13, 16 }, { 25, 18, 18 }, { 19, 27, 15 }, { 21, 11, 23 },
+                                      { 20, 21, 28 }, { 17, 16, 20 }, { 16, 24, 15 }, { 21, 21, 17 }, { 20, 32, 14 } };
+static const u8 at_gain[NHERO][3] = { { 27, 36, 22 }, { 30, 14, 18 }, { 27, 17, 16 }, { 20, 32, 26 }, { 21, 12, 33 },
+                                      { 24, 24, 40 }, { 22, 18, 33 }, { 19, 28, 14 }, { 24, 29, 20 }, { 20, 28, 14 } };
+/* Dota base armor; each AGI adds 1/6 armor, and armor cuts attack damage by 6a / (100 + 6a) */
+static const s8 st_arm[NHERO] = { 0, 0, 0, 0, 1, 0, 0, 0, -2, 0 };
 enum { A_STR, A_AGI, A_INT };
 static const u8 at_prim[NHERO] = { A_AGI, A_STR, A_STR, A_AGI, A_INT, A_INT, A_INT, A_AGI, A_AGI, A_AGI };
 #define MAX_LVL 30
@@ -839,6 +842,8 @@ static s16 atk_dmg(u8 i)
     return d;
 }
 
+static s16 armor_cut(u8 t, s16 d) { return t < NH ? (s16)(muls(d, hr[t].amul) >> 8) : d; }   /* attacks on heroes */
+
 static s16 atk_range(u8 i)
 {
     s16 r = st_rng[hk[i]];
@@ -873,6 +878,9 @@ static void refresh_max(u8 i)
     for (a = 0; a < 3; a++)         /* the base, the gain over the levels above 1, the + points */
         H->at[a] = at_base[kind][a] + divs(times(at_gain[kind][a], H->lvl - 1), 10) + H->stat;
     H->rate = divs(times(st_rate[kind], 100), 100 + H->at[A_AGI] - at_base[kind][A_AGI]);
+    H->arm = st_arm[kind] * 10 + divs(muls(H->at[A_AGI], 10), 6);
+    H->amul = H->arm >= 0 ? divs(256000, 1000 + muls(6, H->arm))          /* negative armor adds damage */
+                          : divs(muls(1000 - muls(12, H->arm), 256), 1000 - muls(6, H->arm));
     n = calc_hpmax(i);
     m = calc_mpmax(i);
     un[i].hp += n - un[i].hpmax;
@@ -1064,6 +1072,7 @@ static Proj *proj_homing(u8 src, u8 tgt, u8 kind, s16 dmg, s16 spd)
             Proj *p = &pj[i];
             p->on = 1; p->kind = kind; p->src = src; p->tgt = tgt; p->dmg = dmg; p->vx = spd; p->t = 0;
             p->st = p->sl = 0;
+            p->ph = 1;
             p->x = un[src].x;
             p->y = un[src].y - FX(un[src].type == U_TOWER ? 34 : (un[src].type > U_TOWER ? 6 : 12));   /* towers shoot from the orb */
             return p;
@@ -1129,7 +1138,7 @@ static void update_projectiles(void)
             d = dist(PX(dx), PX(dy));
             if (d <= PX(p->vx * DT) + 3) {
                 if (un[(u8)p->tgt].type < U_TOWER) stun_slow(p->tgt, p->st, p->sl);
-                hurt(p->src, p->tgt, p->dmg);
+                hurt(p->src, p->tgt, p->ph ? armor_cut(p->tgt, p->dmg) : p->dmg);
                 fx_add(PX(p->x), PX(p->y), FX_SPARK);
                 p->on = 0;
             } else {
@@ -1144,7 +1153,7 @@ static void update_projectiles(void)
 static void deliver(u8 i, u8 t)
 {
     switch (un[i].type) {
-    case U_MELEE: hurt(i, t, 11 + waves); break;
+    case U_MELEE: hurt(i, t, armor_cut(t, 11 + waves)); break;
     case U_RANGED: proj_homing(i, t, PJ_CREEP, 15 + waves, 48); break;
     case U_TOWER: proj_homing(i, t, PJ_TOWER, 62, 80); break;
     default: {
@@ -1166,7 +1175,7 @@ static void deliver(u8 i, u8 t)
             Proj *p = proj_homing(i, t, st_pj[hk[i]], d, 64);
             p->st = st;
             p->sl = sl;
-        } else hurt(i, t, d);
+        } else hurt(i, t, armor_cut(t, d));
     }
     }
     if (t < NH && hk[t] == K_VIPER && hr[t].sk[2] && un[i].type < U_TOWER) {     /* Corrosive Skin */
@@ -1485,6 +1494,7 @@ static void cast_gen(u8 i, u8 k, Cmd *c)
         if (d->pj) {            /* Assassinate */
             Proj *p = proj_homing(i, t, d->pj, dmg, 96);
             p->st = d->stun;
+            p->ph = 0;
             H->cast_lock = 20;
             sfx_play(SFX_SHOT);
             break;
@@ -2763,9 +2773,14 @@ static void learn_draw(void)
     b[3] = 0;
     textA(24, 13, b);
     {                               /* STR AGI INT now */
-        char a[40] = "STR     AGI     INT    ";
+        char a[40] = "STR     AGI     INT     ARM    ";
+        s16 r = H->arm < 0 ? -H->arm : H->arm;
         for (k = 3; k--; ) { num(H->at[k], 3, a + 4 + (k << 3)); a[7 + (k << 3)] = ' '; }   /* num ends the string */
-        a[23] = 0;
+        num(divs(r, 10), 2, a + 28);
+        if (a[28] == '0') a[28] = H->arm < 0 ? '-' : ' ';
+        a[30] = '.';
+        a[31] = '0' + r - times(divs(r, 10), 10);
+        a[32] = 0;
         textA_c(15, a);
     }
     for (k = 0; k < 4; k++) {
