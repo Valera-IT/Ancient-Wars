@@ -260,7 +260,7 @@ BAYER = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]]
 
 
 # ---------------------------------------------------------------- palettes
-# map: 2-4 grass, 5/2/6 tree crowns, 8-10 orange dirt, 11-13 river, 14/15/7 the Dire's dusk
+# map: 2-4 grass (2/5/3 on the Dire side), 5/2/6 tree crowns, 8-10 orange dirt, 11-13 river, 14/15/7 Dire stone
 PAL_MAP = [(0, 0, 0), (0, 0, 0), (0, 3, 1), (1, 4, 1), (2, 5, 1), (0, 2, 1), (3, 6, 2), (3, 3, 6),
            (4, 2, 1), (7, 4, 1), (7, 6, 3), (0, 1, 4), (1, 3, 7), (4, 6, 7), (0, 0, 1), (2, 2, 4)]
 PAL_UI = [(0, 0, 0), (0, 0, 0), (7, 7, 7), (5, 7, 7), (3, 6, 7), (2, 4, 7), (7, 7, 2), (7, 4, 0),
@@ -2373,7 +2373,7 @@ def periodic_tex(seed, base, flecks, n, blades):
 
 
 TEX_GRASS = [periodic_tex(1, 3, [2, 4, 4], 22, True), periodic_tex(2, 3, [4, 2, 4], 18, True)]
-TEX_ASH = [periodic_tex(3, 14, [15, 15, 1], 20, False), periodic_tex(4, 14, [15, 1], 16, False)]
+TEX_ASH = [periodic_tex(3, 2, [5, 3, 5], 22, True), periodic_tex(4, 2, [3, 5, 5], 18, True)]   # the Dire: darker grass
 TEX_DIRT = [periodic_tex(5, 9, [10, 10, 8], 18, False)]
 TEX_WATER = [[12] * 16 for _ in range(16)]
 for y in range(16):
@@ -2403,7 +2403,7 @@ def slab(x, y, hi, lo, line_c):
     return lo if (bx + by) % 11 else hi
 
 
-DARKEN = {2: 5, 3: 2, 4: 2, 6: 2, 8: 1, 9: 8, 10: 9, 14: 1, 15: 14, 7: 14, 12: 11, 13: 12, 11: 1}
+DARKEN = {2: 5, 5: 14, 3: 2, 4: 2, 6: 2, 8: 1, 9: 8, 10: 9, 14: 1, 15: 14, 7: 14, 12: 11, 13: 12, 11: 1}
 
 LUMPS = [(4, 4, 6.4), (12, 12, 6.4)]
 
