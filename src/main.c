@@ -397,9 +397,10 @@ static u8 walkable(s16 x, s16 y)
 }
 
 /* ================================================================ game data */
-enum { U_HERO, U_MELEE, U_RANGED, U_TOWER, U_ANCIENT };
+enum { U_HERO, U_MELEE, U_RANGED, U_ROSH, U_TOWER, U_ANCIENT };
 enum { PJ_SF, PJ_CREEP, PJ_TOWER, PJ_BULLET, PJ_ICE, PJ_FIRE, PJ_POISON, PJ_REQ, PJ_LFIRE, PJ_LROCK };  /* REQ on: lines */
 enum { FX_RAZE, FX_SPARK, FX_POOF, FX_DENY, FX_GOLD, FX_RING, FX_HELIX, FX_DMG, FX_FIRE, FX_ICE, FX_BOLT };
+enum { R_DD, R_HASTE, R_REGEN, R_BOUNTY };     /* runes */
 enum { IT_BOOTS = 1, IT_BLADES = 2, IT_VIT = 4, IT_BLINK = 8, IT_BRACER = 16 };
 #define NITEM 5
 #define F_HERO 1
@@ -414,7 +415,8 @@ enum { K_SF, K_PUDGE, K_AXE, K_SNIPER, K_ZEUS, K_LINA, K_CM, K_DROW, K_VIPER, K_
 #define FIRST_BLD NH
 #define NBLD 14
 #define FIRST_CREEP (FIRST_BLD + NBLD)
-#define NU (FIRST_CREEP + 42)
+#define ROSH (FIRST_CREEP + 42)   /* Roshan: neutral (team 2), in both teams' enemy lists */
+#define NU (ROSH + 1)
 #define NP 28
 #define NFX 24
 /* building slot inside a team: top T1, top T2, mid T1, mid T2, bot T1, bot T2, Ancient */
@@ -444,6 +446,7 @@ typedef struct {
     u8 buf_t, heal_t, omni_n;   /* Blade Fury and Healing Ward frames left; Omnislash jumps left */
     u8 chan_t, chan_kind, hook_st, hook_t, ai_st, cast_lock, ai_lane, ai_t;
     s8 chan_tgt, hook_tgt;
+    u8 rune, rune_t;    /* the power rune in effect and its seconds left */
 } Hero;
 
 typedef struct { s8 mvx, mvy, tgt; u8 cast, aim, face; s16 ax, ay; } Cmd;
@@ -565,7 +568,10 @@ static void build_lists(void)
             cpx[t] = PX(un[t].x);
             cpy[t] = PX(un[t].y);
             ukind[t] = t < FIRST_BLD ? 0 : (t < FIRST_CREEP ? 2 : 1);
-            tlist[k][tcount[k]++] = t;
+            if (k > 1) {                    /* Roshan is everybody's enemy */
+                tlist[0][tcount[0]++] = t;
+                tlist[1][tcount[1]++] = t;
+            } else tlist[k][tcount[k]++] = t;
         }
 }
 
@@ -839,6 +845,7 @@ static s16 atk_dmg(u8 i)
     if (hk[i] == K_DROW) d += (H->sk[0] << 1) + (H->sk[3] << 3);      /* Frost Arrows, Marksmanship */
     if (H->items & IT_BLADES) d += 10;
     if (H->items & IT_BRACER) d += 3;
+    if (H->rune_t && H->rune == R_DD) d <<= 1;
     return d;
 }
 
@@ -852,6 +859,7 @@ static s16 armor_cut(u8 t, s16 d)
     case U_MELEE: m = 228; break;
     case U_TOWER: m = bld_slot(t) & 1 ? 130 : 148; break;
     case U_ANCIENT: m = 107; break;
+    case U_ROSH: m = 170; break;
     default: return d;
     }
     return (s16)(muls(d, m) >> 8);
@@ -870,6 +878,7 @@ static s16 hero_spd(u8 i)
     s16 s = st_spd[hk[i]];
     if (hk[i] == K_LINA) s += hr[i].sk[2];                               /* Fiery Soul */
     if (hr[i].items & IT_BOOTS) s += 6;
+    if (hr[i].rune_t && hr[i].rune == R_HASTE) s = 34;        /* Haste: the top speed */
     return s;
 }
 
@@ -879,6 +888,7 @@ static u8 unit_rate(u8 i)
     case U_HERO: return hr[i].rate - (hk[i] == K_LINA ? hr[i].sk[2] << 2 : 0);
     case U_MELEE: return 60;
     case U_RANGED: return 66;
+    case U_ROSH: return 70;
     default: return 56;
     }
 }
@@ -927,6 +937,22 @@ static void hud_part1(u8 part);
 static void clock_text(char *b);
 static void counter_helix(u8 i);
 
+/* Roshan, the Aegis and the runes */
+static u16 rosh_t;                 /* seconds until Roshan comes back; 0 while he lives */
+static u8 rosh_calm, rosh_slam;    /* frames since he was last hit (to 255); slam cooldown */
+static s8 aegis;                   /* the hero holding the Aegis of the Immortal, else -1 */
+static u16 aegis_t;                /* its seconds left */
+static u8 rune_on[4];              /* each spot's rune kind + 1, 0 = none */
+static u8 power_t, bounty_t;       /* seconds to the next power rune, bounty runes */
+/* the power runes sit in the river above and below mid, a bounty rune in each side's jungle */
+static const s16 rune_x[4] = { 400, 624, 296, 728 };
+static const s16 rune_y[4] = { 400, 624, 472, 552 };
+static const u8 rune_secs[3] = { 45, 22, 30 };
+static const char *const rune_name[4] = { ": DOUBLE DAMAGE", ": HASTE", ": REGENERATION", ": BOUNTY" };
+
+static s16 game_min(void) { return divs(game_sec, 60); }
+static s16 rosh_dmg(void) { return 65 + times(3, game_min()); }
+
 /* Dota-style kill streak announcements */
 static u8 streak[NH];
 static const char *const streak_msg[8] = { ": KILLING SPREE!", ": DOMINATING!", ": MEGA KILL!", ": UNSTOPPABLE!",
@@ -962,7 +988,7 @@ static void hurt(s8 src, u8 t, s16 dmg)
     if (src >= 0 && un[(u8)src].team == v->team && (src >= NH || !deniable(t, v->team))) return;
     {
         u8 e;
-        for (e = v->team ^ 1; e < nh; e += 2)      /* the enemy heroes' slots */
+        for (e = v->team > 1 ? 0 : v->team ^ 1; e < nh; e += v->team > 1 ? 1 : 2)      /* the enemy heroes' slots */
             if (hk[e] == K_SF && un[e].on && udist(e, t) < 80) dmg += times(dmg >> 5, hr[e].sk[2]);  /* Presence */
     }
     if (t < NH && hk[t] == K_PUDGE) dmg -= times(dmg >> 5, hr[t].sk[2]);                         /* Flesh Heap */
@@ -972,11 +998,16 @@ static void hurt(s8 src, u8 t, s16 dmg)
     v->hp -= dmg;
     v->hit = 4;
     /* damage numbers: hero duels, towers on heroes, and big spells */
-    if (src >= 0 && ((t < NH && (src < NH || un[(u8)src].type == U_TOWER)) || (src < NH && dmg >= 50)))
+    if (src >= 0 && ((t < NH && (src < NH || un[(u8)src].type >= U_ROSH)) || (src < NH && dmg >= 50)))
         fx_val(PX(v->x) + (rnd() & 7) - 4, PX(v->y) - (t < NH ? 30 : 18), FX_DMG, dmg);
     if (src >= 0) {
         v->killer = src;
         if (src < NH && t < NH) un[(u8)src].aggro = 120;
+        if (t < NH && hr[t].rune == R_REGEN && (src < NH || un[(u8)src].type >= U_ROSH)) hr[t].rune_t = 0;
+        if (t == ROSH) {                    /* Roshan turns on whoever hits him */
+            rosh_calm = 0;
+            if (v->tgt < 0) v->tgt = src;
+        }
     }
     if (t == view && (vcount & 7) == 0) sfx_play(SFX_HIT);
     if (v->hp <= 0) { kill_unit(t, src); return; }
@@ -990,6 +1021,19 @@ static void kill_unit(u8 t, s8 src)
     u8 k, eteam = v->team ^ 1, denied = src >= 0 && src < NH && un[(u8)src].team == v->team;
     u16 xpv = v->type == U_MELEE ? 45 : (v->type == U_RANGED ? 60 :
               (v->type == U_HERO ? 120 + hr[t].lvl * 25 : 140));
+    if ((s8)t == aegis) {           /* the Aegis: back on its feet where it fell, at full health */
+        Hero *H = &hr[t];
+        aegis = -1;
+        v->hp = v->hpmax;
+        H->mana = H->manamax;
+        v->stun = v->slow = v->taunt = v->hunger = 0;
+        H->chan_t = 0;
+        fx_val(PX(v->x), PX(v->y) - 10, FX_RING, 0);
+        fx_add(PX(v->x), PX(v->y) - 8, FX_SPARK);
+        announce(hk[t], ": REINCARNATED BY THE AEGIS");
+        hud_dirty = 1;
+        return;
+    }
     v->hp = 0;
     v->on = 0;
     fx_add(PX(v->x), PX(v->y) - 8, FX_POOF);
@@ -1023,6 +1067,37 @@ static void kill_unit(u8 t, s8 src)
         sfx_play(SFX_BIGEXPL);
         shake = 20;
         break;
+    case U_ROSH: {
+        u8 team = src >= 0 ? un[(u8)src].team : 2, best = 255;
+        s16 bd = 200;
+        rosh_t = 480 + (rnd() & 127) + (rnd() & 63);     /* back in 8 to 11 minutes */
+        debris(PX(v->x), PX(v->y) - 12, 16);
+        sfx_play(SFX_BIGEXPL);
+        shake = 20;
+        if (team > 1) { msg("ROSHAN HAS FALLEN", 150); break; }
+        for (k = team; k < nh; k += 2) {               /* the whole side: gold; those close: experience */
+            hr[k].gold += 150;
+            hr[k].earned += 150;
+            if (un[k].on && udist(k, t) < 200) give_xp(k, 300);
+        }
+        if (src < NH) best = src;                      /* the Aegis to the killer, else the nearest ally */
+        else
+            for (k = team; k < nh; k += 2)
+                if (un[k].on && udist(k, t) < bd) { bd = udist(k, t); best = k; }
+        if (best < NH) {
+            char b[40];
+            const char *m = "ROSHAN SLAIN! AEGIS: ", *n = hero_name[hk[best]];
+            u8 j = 0;
+            while (*m) b[j++] = *m++;
+            while (*n) b[j++] = *n++;
+            b[j] = 0;
+            aegis = best;
+            aegis_t = 300;
+            msg(b, 180);
+        } else msg(team ? "THE DIRE HAVE SLAIN ROSHAN" : "THE RADIANT HAVE SLAIN ROSHAN", 150);
+        sfx_play(SFX_ALARM);
+        break;
+    }
     case U_ANCIENT:
         winner = eteam + 1;
         debris(PX(v->x), PX(v->y) - 8, 24);
@@ -1034,6 +1109,7 @@ static void kill_unit(u8 t, s8 src)
         u8 e = src >= 0 && src < NH && un[(u8)src].team == eteam ? src : t ^ 1;   /* the killer, else an enemy */
         H->deaths++;
         H->respawn = 200 + H->lvl * 40;
+        H->rune_t = 0;
         H->chan_t = 0;
         H->hook_st = 0;
         H->rot = 0;
@@ -1074,7 +1150,7 @@ static void kill_unit(u8 t, s8 src)
 }
 
 /* ------------------------------------------------------------- projectiles */
-static s16 aim_h(u8 t) { return un[t].type >= U_TOWER ? 4 : 10; }
+static s16 aim_h(u8 t) { return un[t].type >= U_TOWER ? 4 : (un[t].type == U_ROSH ? 16 : 10); }
 
 static Proj *proj_homing(u8 src, u8 tgt, u8 kind, s16 dmg, s16 spd)
 {
@@ -1169,6 +1245,10 @@ static void deliver(u8 i, u8 t)
     case U_MELEE: hurt(i, t, armor_cut(t, 11 + waves)); break;
     case U_RANGED: proj_homing(i, t, PJ_CREEP, 15 + waves, 48); break;
     case U_TOWER: proj_homing(i, t, PJ_TOWER, 62, 80); break;
+    case U_ROSH:
+        hurt(i, t, armor_cut(t, rosh_dmg()));
+        if ((rnd() & 3) == 0 && un[t].on) stun_slow(t, 24, 0);      /* Bash */
+        break;
     default: {
         s16 d = atk_dmg(i);
         u8 st = 0, sl = 0, l = hr[i].sk[2];
@@ -1218,9 +1298,9 @@ static void spawn_creep(u8 team, u8 type, u8 lane, u8 slot)
 {
     u8 i, w;
     Unit *c;
-    for (i = FIRST_CREEP; i < NU; i++)
+    for (i = FIRST_CREEP; i < ROSH; i++)
         if (!un[i].on) break;
-    if (i == NU) return;
+    if (i == ROSH) return;
     c = &un[i];
     memset(c, 0, sizeof(Unit));
     c->on = 1; c->type = type; c->team = team; c->slot = slot; c->tgt = -1; c->killer = -1;
@@ -1314,7 +1394,7 @@ static void creep_update(u8 i, u8 n)
         c->tgt = t = n;
     }
     if (t >= 0) {
-        s16 d = udist(i, t) - (un[(u8)t].type >= U_TOWER ? 12 : 0);
+        s16 d = udist(i, t) - (un[(u8)t].type >= U_ROSH ? 12 : 0);
         if (d <= rng) {
             face_to(i, t);
             unit_attack(i, t);
@@ -1353,6 +1433,141 @@ static void building_update(u8 i)
     w->tgt = t;
     if (t >= 0) unit_attack(i, t);
     else w->wind = 0;
+}
+
+/* ------------------------------------------------------------- Roshan and the runes */
+static void rosh_spawn(void)
+{
+    Unit *R = &un[ROSH];
+    memset(R, 0, sizeof(Unit));
+    R->on = 1;
+    R->type = U_ROSH;
+    R->team = 2;
+    R->x = FX(ROSH_X);
+    R->y = FX(ROSH_Y);
+    R->face = 1;
+    R->tgt = R->killer = -1;
+    R->hpmax = R->hp = 3000 + times(150, game_min());      /* he grows with the game */
+    rosh_calm = 255;
+}
+
+/* Roshan stays in his pit: he fights whoever comes close or hits him, never strays more than
+   80 px, slams the ground round him every few seconds and heals when left alone */
+static void rosh_update(void)
+{
+    Unit *R = &un[ROSH];
+    s8 t = R->tgt;
+    s16 x = PX(R->x), y = PX(R->y);
+    u8 k;
+    if (!R->on) return;
+    DECN(R->hit, DT);
+    DECN(R->cd, DT);
+    DECN(R->slow, DT);
+    DECN(R->imm, DT);
+    DECN(rosh_slam, DT);
+    R->stun = R->taunt = 0;                 /* no stuns or taunts hold him */
+    if (rosh_calm < 255) rosh_calm++;
+    if (rosh_calm > 120 && (game_t & 15) == 0 && R->hp < R->hpmax) {
+        R->hp += 6 + (R->hpmax >> 7);
+        if (R->hp > R->hpmax) R->hp = R->hpmax;
+    }
+    if (t >= 0 && (!attackable(t, 2) || dist(PX(un[(u8)t].x) - ROSH_X, PX(un[(u8)t].y) - ROSH_Y) > 88)) t = -1;
+    if (t < 0 && (stc & 3) == 0) {          /* any hero that walks up to him */
+        s16 bd = 40;
+        for (k = 0; k < nh; k++)
+            if (attackable(k, 2) && udist(ROSH, k) < bd) { bd = udist(ROSH, k); t = k; }
+    }
+    R->tgt = t;
+    if (t < 0) {
+        R->wind = 0;
+        if (dist(x - ROSH_X, y - ROSH_Y) > 3) move_to(ROSH, ROSH_X, ROSH_Y, 16 * DT);
+        else R->face = 1;
+        return;
+    }
+    if (udist(ROSH, t) > 30) {
+        R->wind = 0;
+        move_to(ROSH, PX(un[(u8)t].x), PX(un[(u8)t].y), 16 * DT);
+        return;
+    }
+    face_to(ROSH, t);
+    unit_attack(ROSH, t);
+    if (!rosh_slam) {                       /* Slam: hurts and slows every hero close by */
+        s16 d = rosh_dmg() >> 1;
+        rosh_slam = 200;
+        fx_val(x, y - 8, FX_RING, 0);
+        for (k = 0; k < nh; k++)
+            if (attackable(k, 2) && udist(ROSH, k) < 44) {
+                stun_slow(k, 0, 90);
+                hurt(ROSH, k, d);
+            }
+        if (dist(x - camx - 160, y - camy - 96) < 200) { sfx_play(SFX_BIGEXPL); shake = 6; }
+    }
+}
+
+static void rune_spawn(u8 k, u8 kind)
+{
+    rune_on[k] = kind + 1;
+}
+
+static void rune_take(u8 i, u8 k)
+{
+    Hero *H = &hr[i];
+    u8 kind = rune_on[k] - 1;
+    rune_on[k] = 0;
+    if (kind == R_BOUNTY) {                 /* gold for the whole side, experience for the taker */
+        u16 g = 40 + times(4, game_min());
+        u8 j;
+        for (j = i & 1; j < nh; j += 2) { hr[j].gold += g; hr[j].earned += g; }
+        give_xp(i, 40 + times(6, game_min()));
+        fx_val(PX(un[i].x), PX(un[i].y) - 24, FX_GOLD, g);
+    } else {
+        H->rune = kind;
+        H->rune_t = rune_secs[kind];
+    }
+    announce(hk[i], rune_name[kind]);
+    hud_dirty = 1;
+}
+
+/* heroes pick up a rune by walking over it */
+static void runes_update(void)
+{
+    u8 k, i;
+    for (k = 0; k < 4; k++)
+        if (rune_on[k])
+            for (i = 0; i < nh; i++) {
+                s16 dx = PX(un[i].x) - rune_x[k], dy = PX(un[i].y) - rune_y[k];
+                if (un[i].on && dx < 12 && dx > -12 && dy < 12 && dy > -12) { rune_take(i, k); break; }
+            }
+}
+
+static void rosh_plan(u8 team);
+
+/* once a second: rune spawns and timers, Roshan's return, the Aegis running out, the bots' plans */
+static void world_second(void)
+{
+    u8 k;
+    if (game_sec & 1) rosh_plan(game_sec & 2 ? 1 : 0);
+    if (!--power_t) {                       /* every 2 minutes, at one of the two river spots */
+        k = rnd() & 3;
+        power_t = 120;
+        rune_on[0] = rune_on[1] = 0;
+        rune_spawn(rnd() & 1, k == 3 ? R_DD : k);
+    }
+    if (!--bounty_t) {
+        bounty_t = 180;
+        rune_spawn(2, R_BOUNTY);
+        rune_spawn(3, R_BOUNTY);
+    }
+    for (k = 0; k < nh; k++) {
+        Hero *H = &hr[k];
+        if (H->rune_t) H->rune_t--;
+    }
+    if (rosh_t && !--rosh_t) rosh_spawn();
+    if (aegis >= 0 && !--aegis_t) {
+        if (un[(u8)aegis].on) un[(u8)aegis].hp = un[(u8)aegis].hpmax;     /* it heals as it fades, as in Dota */
+        aegis = -1;
+        msg("THE AEGIS HAS EXPIRED", 120);
+    }
 }
 
 /* ------------------------------------------------------------- abilities */
@@ -1784,7 +1999,7 @@ static void hook_update(u8 i)
             if (un[t].type >= U_TOWER || !attackable(t, P->team)) continue;
             if (dist(PX(un[t].x - H->hx), PX(un[t].y - FX(8) - H->hy)) < 10) {
                 H->hook_tgt = t;
-                H->hook_st = 2;
+                H->hook_st = t == ROSH ? 3 : 2;               /* Roshan is far too heavy to drag */
                 hurt(i, t, times(90, hr[i].sk[0]));
                 sfx_play(SFX_HIT);
                 break;
@@ -1885,6 +2100,7 @@ static void player_cmd(u8 i, Cmd *c)
 /* Lane geometry for the bots: s is the distance along a lane from the Radiant Ancient. */
 #define NO_FRONT 0x7FFF
 static s16 lane_cum[3][6], bld_s[NBLD];
+static s16 cross_s[2];      /* where the top lane and mid cross the river */
 static u8 ls_seg;
 
 /* project (x, y) onto segments k0..k1 of a lane: returns s, sets *off to the distance
@@ -1936,6 +2152,8 @@ static void lanes_init(void)
     for (k = 0; k < NBLD; k++)
         if (k % 7 != B_ANCIENT)
             bld_s[k] = lane_s((k % 7) >> 1, PX(un[FIRST_BLD + k].x), PX(un[FIRST_BLD + k].y), &off);
+    cross_s[0] = lane_s(0, 112, 112, &off);
+    cross_s[1] = lane_s(1, 512, 512, &off);
 }
 
 /* a team's first standing structure on a lane, from the outside in */
@@ -1961,7 +2179,7 @@ static void fronts_update(void)
 {
     u8 i, k;
     for (k = 0; k < 3; k++) front[0][k] = front[1][k] = NO_FRONT;
-    for (i = FIRST_CREEP; i < NU; i++) {
+    for (i = FIRST_CREEP; i < ROSH; i++) {
         Unit *c = &un[i];
         s16 p, *f;
         u8 cl;
@@ -2011,6 +2229,57 @@ static void lane_walk(Cmd *c, u8 i, u8 l, s16 want)
     if (want < s - 48) want = s - 48;
     lane_point(l, want, &tx, &ty);
     goto_pt(c, x, y, tx + ((i & 1) ? -6 : 6) + side_off[i >> 1], ty + ((i & 1) ? -6 : 6) - side_off[i >> 1]);
+}
+
+/* the straight walk from (x, y) to (tx, ty) has no trees on it */
+static u8 clear_path(s16 x, s16 y, s16 tx, s16 ty)
+{
+    s16 dx = (tx - x) >> 3, dy = (ty - y) >> 3;
+    u8 k;
+    for (k = 0; k < 8; k++) {
+        x += dx;
+        y += dy;
+        if (!walkable(x, y)) return 0;
+    }
+    return 1;
+}
+
+/* Roshan: along the river to the pit (from mid or the top lane), then hit him */
+static void rosh_cmd(Cmd *c, u8 i, s16 x, s16 y)
+{
+    if (dist(x - ROSH_X, y - ROSH_Y) < 72) { c->tgt = ROSH; return; }
+    if (x - y < 40 && y - x < 40) goto_pt(c, x, y, ROSH_X, ROSH_Y);
+    else {
+        u8 l = nearest_lane(x, y) == 0 ? 0 : 1;
+        lane_walk(c, i, l, cross_s[l]);
+    }
+}
+
+/* every 2 seconds: can the side's bots (and players next to the pit) kill Roshan in time without
+   losing too much health, with no more enemy heroes up than ours? */
+static u8 rosh_go[2];
+static void rosh_plan(u8 team)
+{
+    Unit *R = &un[ROSH];
+    u8 k, n = 0, foes = 0, was = rosh_go[team];
+    s16 dps = 0, hp = 0, secs, rd;
+    rosh_go[team] = 0;
+    if (!R->on || (aegis >= 0 && (aegis & 1) == team)) return;
+    for (k = team; k < nh; k += 2)
+        if (un[k].on && (hr[k].bot ? hr[k].ai_st != 1 && hr[k].lvl >= 9 : udist(k, ROSH) < 120)) {
+            n++;
+            dps += divs(muls(atk_dmg(k), 60), unit_rate(k));
+            hp += un[k].hp;
+        }
+    for (k = team ^ 1; k < nh; k += 2)
+        if (un[k].on) foes++;
+    if (!n || foes > n || (nh > 2 && n < 2)) return;
+    dps -= (dps >> 2) + (dps >> 4);                 /* his armor */
+    if (dps < 8) return;
+    secs = divs(R->hp, dps);
+    rd = divs(muls(rosh_dmg(), 60), 70);
+    rd -= rd >> 2;
+    rosh_go[team] = secs < 50 && muls(rd, secs) < (was ? hp : hp - (hp >> 1));
 }
 
 static void bot_shop(u8 i)
@@ -2227,6 +2496,16 @@ static void bot_cmd(u8 i, Cmd *c)
         return;
     }
 
+    /* Roshan, when the side is up to it and the enemy hero is not about */
+    if (rosh_go[U->team] && (!E->on || ed > 150)) { rosh_cmd(c, i, x, y); return; }
+    /* a rune close by */
+    if (!E->on || ed > 110)
+        for (k = 0; k < 4; k++)
+            if (rune_on[k] && dist(rune_x[k] - x, rune_y[k] - y) < 160 && clear_path(x, y, rune_x[k], rune_y[k])) {
+                goto_pt(c, x, y, rune_x[k], rune_y[k]);
+                return;
+            }
+
     /* last hits and denies */
     t = cs_target(i, 130, hk[i] == K_SF ? 6 : 2);
     if (t >= 0) { c->tgt = t; return; }
@@ -2319,6 +2598,13 @@ static void hero_update(u8 i)
         if (U->hp > U->hpmax) U->hp = U->hpmax;
         if (H->mana > H->manamax) H->mana = H->manamax;
     }
+    if (H->rune_t && H->rune == R_REGEN && (game_t & 7) == 0) {     /* until full or hit */
+        U->hp += 1 + (U->hpmax >> 5);
+        H->mana += 1 + (H->manamax >> 5);
+        if (U->hp > U->hpmax) U->hp = U->hpmax;
+        if (H->mana > H->manamax) H->mana = H->manamax;
+        if (U->hp == U->hpmax && H->mana == H->manamax) H->rune_t = 0;
+    }
     if ((game_t & 7) == 0 && dist(PX(U->x) - fountain_x[(i ^ 1) & 1], PX(U->y) - fountain_y[(i ^ 1) & 1]) < 72) hurt(-1, i, 40);
     if (!U->on) return;
 
@@ -2403,7 +2689,7 @@ static void hero_update(u8 i)
         U->tgt = -1;
     } else if (c.tgt >= 0) {
         s8 t = c.tgt;
-        s16 d = udist(i, t) - (un[(u8)t].type >= U_TOWER ? 12 : 0), r = atk_range(i);
+        s16 d = udist(i, t) - (un[(u8)t].type >= U_ROSH ? 12 : 0), r = atk_range(i);
         if (un[(u8)t].type >= U_TOWER && r > 84) r = 84;      /* towers reach 100: nobody hits them for free */
         U->tgt = t;
         if (d <= r) {
@@ -2919,6 +3205,16 @@ static void draw_scene(void)
             de_add(y, x - 8, y - 12, 0x05,
                    ATTR(pal, 0, (v->type == U_MELEE ? T_MELEE : T_RANGED) + (sd * 2 + ((v->anim >> 2) & 1)) * 4) | fl);
             break;
+        case U_ROSH: {          /* 48x48 in four 24x24 pieces: standing, or reared up to strike */
+            u16 a = ATTR(2, 0, T_ROSH + (v->wind || rosh_slam > 184 ? 36 : 0)) | (v->face >= 3 && v->face <= 5 ? HFLIP : 0);
+            s16 l = fl ? x : x - 24, r = fl ? x - 24 : x;
+            if (v->hit & 2) a ^= 0x2000;         /* a flash of the other palette when hit */
+            de_add(y, l, y - 42, 0x0A, a);
+            de_add(y, r, y - 42, 0x0A, a + 9);
+            de_add(y, l, y - 18, 0x0A, a + 18);
+            de_add(y, r, y - 18, 0x0A, a + 27);
+            break;
+        }
         case U_TOWER:
             de_add(y + 8, x - 16, y - 40, 0x0F, ATTR(pal, 0, T_TOWER));      /* 32x48: crown and pillar, */
             de_add(y + 8, x - 16, y - 8, 0x0D, ATTR(pal, 0, T_TOWER_B));    /* then the plinth */
@@ -2930,9 +3226,20 @@ static void draw_scene(void)
             de_add(y + 16, x, y, 0x0A, ATTR(pal, 0, T_ANCIENT + 27));
         }
     }
-    /* hero bars above everything */
+    /* runes, bobbing */
+    for (i = 0; i < 4; i++)
+        if (rune_on[i]) {
+            s16 rx = rune_x[i] - camx, ry = rune_y[i] - camy;
+            de_add(ry, rx - 8, ry - 12 + (sintab[(game_t >> 1) & 63] >> 5), 0x05, ATTR(2, 0, T_RUNE + ((rune_on[i] - 1) << 2)));
+        }
+    /* hero bars above everything, with the rune in effect and the Aegis beside them */
     for (i = 0; i < nh; i++)
-        if (un[i].on) unit_bar(PX(un[i].x) - 12, PX(un[i].y) - 30, 3, un[i].hp, un[i].hpmax, un[i].team + 2);
+        if (un[i].on) {
+            s16 hx = PX(un[i].x), hy = PX(un[i].y);
+            unit_bar(hx - 12, hy - 30, 3, un[i].hp, un[i].hpmax, un[i].team + 2);
+            if (hr[i].rune_t) wspr(hx - 21, hy - 32, 0, ATTR(2, 1, T_RUNEM + hr[i].rune));
+            if (aegis == (s8)i) wspr(hx + 12, hy - 32, 0, ATTR(2, 1, T_AEGIS));
+        }
     {
         s8 b;
         for (b = 47; b >= 0; b--)
@@ -2947,6 +3254,7 @@ static void draw_scene(void)
         if (!v->on || v->hp >= v->hpmax) continue;
         if (v->type == U_TOWER) unit_bar(PX(v->x) - 12, PX(v->y) - 46, 3, v->hp, v->hpmax, v->team + 2);
         else if (v->type == U_ANCIENT) unit_bar(PX(v->x) - 16, PX(v->y) - 30, 4, v->hp, v->hpmax, v->team + 2);
+        else if (v->type == U_ROSH) unit_bar(PX(v->x) - 16, PX(v->y) - 48, 4, v->hp, v->hpmax, 3);
         else unit_bar(PX(v->x) - 4, PX(v->y) - 16, 1, v->hp, v->hpmax, v->team + 2);
     }
     /* hook & rot */
@@ -3444,6 +3752,16 @@ static void match_init(u8 mode)
         b->killer = -1;
     }
     lanes_init();
+    rosh_t = 0;
+    rosh_slam = 0;
+    aegis = -1;
+    game_sec = 0;
+    rosh_spawn();
+    memset(rune_on, 0, sizeof(rune_on));
+    rune_spawn(2, R_BOUNTY);            /* bounty runes at the horn, power runes from 2:00 */
+    rune_spawn(3, R_BOUNTY);
+    power_t = 120;
+    bounty_t = 180;
     versus = mode == 3;
     me = mode < 2 ? mode : 255;
     port_of[0] = me == 1;       /* the human always uses controller 1 */
@@ -3638,7 +3956,7 @@ static void split_off(void)
 static void creeps_update(u8 part)
 {
     u8 i;
-    for (i = FIRST_CREEP; i < NU; i++) {
+    for (i = FIRST_CREEP; i < ROSH; i++) {
         s16 sx, sy;
         if (!un[i].on) continue;
         sx = PX(un[i].x) - camx;
@@ -3772,6 +4090,7 @@ static void match(u8 mode)
                 sec_f = 0;
                 game_sec++;
                 for (u8 k = 0; k < nh; k++) { hr[k].gold++; hr[k].earned++; }
+                world_second();
             }
             build_lists();
             if ((wave_t -= DT) == 0) {
@@ -3790,6 +4109,8 @@ static void match(u8 mode)
             creeps_update(0);
             for (i = FIRST_BLD; i < FIRST_CREEP; i++)
                 if (un[i].on) building_update(i);
+            rosh_update();
+            if ((stc & 1) == 0) runes_update();
             update_projectiles();
             update_fx();
             if (me < 2 && !versus) tips_update();

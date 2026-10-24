@@ -1933,6 +1933,179 @@ def tower():
     return add_outline(b)
 
 
+# ---------------------------------------------------------------- Roshan, runes, the Aegis
+def path(b, pts, c, w=1):
+    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+        line(b, x0, y0, x1, y1, c, w)
+
+
+def roshan(f):
+    """Roshan, 48x48, facing the camera, after the Dota 2 model: a huge hunched back of big grey
+    scale plates with spikes on the ridge, purple-black bony wings hooked at the tips, a low dark
+    head with yellow eyes and bone tusks, two massive banded mauve forearms with long dark claws,
+    a spiked tail and a torn red cloth. f = 1: rearing up, right arm raised to strike, maw open."""
+    b = bmp(48, 48)
+    shadow(b, 24, 43, 21, 4)
+    # wings: bony rods from the shoulders, hooked at the ends (dark maroon for the purple)
+    for s in (-1, 1):
+        X = lambda x: 24 + s * x
+        path(b, [(X(8), 13), (X(13), 5), (X(19), 1), (X(23), 3)], 13, 2)
+        path(b, [(X(23), 3), (X(23), 8), (X(21), 10)], 13, 1)
+        path(b, [(X(14), 4), (X(16), 11)], 14, 1)
+        path(b, [(X(19), 2), (X(20), 9)], 14, 1)
+    # tail with green spines, out to the right behind the haunch
+    path(b, [(34, 34), (40, 36), (44, 34), (46, 30)], 2, 2)
+    for x, y in ((39, 35), (43, 33), (45, 30)):
+        put(b, x, y - 1, 10)
+        put(b, x, y - 2, 11)
+    # hind feet
+    for s in (-1, 1):
+        ell(b, 24 + s * 11, 39, 4, 2.5, 2)
+    # the hump of big plates
+    for y in range(48):
+        for x in range(48):
+            if ((x + 0.5 - 24) / 16.0) ** 2 + ((y + 0.5 - 21) / 12.5) ** 2 > 1:
+                continue
+            best = []
+            for j in range(-1, 9):
+                for i in range(-1, 8):
+                    cx = i * 8 + (4 if j % 2 else 0)
+                    cy = j * 6 + 8
+                    best.append(((x + 0.5 - cx) ** 2 + ((y + 0.5 - cy) * 1.2) ** 2, cx, cy))
+            best.sort()
+            d0, cx, cy = best[0]
+            dark = y > 26 or abs(x - 24) > 13
+            if best[1][0] - d0 < 7:
+                c = 1 if dark else 2                      # the seams
+            elif (x + 0.5 - cx) + (y + 0.5 - cy) < -2:
+                c = 3 if dark else 4                      # each plate's lit upper-left
+            else:
+                c = 2 if dark else 3
+            b[y][x] = c
+    for x, y, h in ((14, 12, 3), (19, 10, 4), (24, 9, 4), (29, 10, 4), (34, 12, 3)):   # ridge spikes
+        line(b, x, y, x, y - h, 4)
+        put(b, x, y - h, 5)
+    # torn red cloth over the right haunch
+    path(b, [(37, 18), (39, 23), (38, 29)], 12, 2)
+    put(b, 40, 24, 13)
+    put(b, 38, 30, 13)
+    # forearms: heavy, mauve, banded, with long dark claws
+    def arm(sx, sy, wx, wy, up):
+        n = 6
+        for k in range(n + 1):                              # thick at the elbow, thinner to the wrist
+            t = k / float(n)
+            ell(b, sx + (wx - sx) * t, sy + (wy - sy) * t, 4.2 - t * 1.2, 3.2 - t * 0.6, 7)
+        for k in range(n + 1):
+            t = k / float(n)
+            px, py = sx + (wx - sx) * t, sy + (wy - sy) * t
+            put(b, round(px + (3 if sx > 24 else -3)), round(py), 14)    # shaded outer side
+            if k in (2, 4):
+                line(b, round(px - 2), round(py), round(px + 2), round(py), 14)   # plate bands
+        hyy = wy + (-3 if up else 2)
+        ell(b, wx, hyy, 5.5, 3, 7)
+        line(b, wx - 4, hyy + (-1 if up else 1), wx + 4, hyy + (-1 if up else 1), 14)
+        for k in (-4, -1, 2, 5):                            # claws
+            d = -1 if wx < 24 else 1
+            if up:
+                path(b, [(wx + k - 1, hyy - 3), (wx + k - 1 + d, hyy - 6)], 2)
+                put(b, wx + k - 1 + d, hyy - 7, 3)
+            else:
+                path(b, [(wx + k - 1, hyy + 3), (wx + k - 1 + d, hyy + 6)], 2)
+                put(b, wx + k - 1 + d, hyy + 6, 3)
+    arm(13, 26, 10, 37, False)
+    if f:
+        arm(35, 24, 41, 11, True)
+    else:
+        arm(35, 26, 38, 37, False)
+    # head: low in front, under the shoulders
+    hy = 31 if not f else 30
+    ell(b, 24, hy + 1, 9, 7, 1)
+    shade_sphere(b, 24, hy, 8, [2, 2, 3], 8.5, 6.5)
+    line(b, 18, hy - 4, 30, hy - 4, 3)                      # brow ridge
+    for s in (-1, 1):
+        path(b, [(24 + s * 6, hy - 5), (24 + s * 9, hy - 9)], 14, 1)      # horn stubs
+        rect(b, 24 + s * 4 - (1 if s < 0 else 0), hy - 2, 24 + s * 4 + (0 if s < 0 else 1), hy - 2, 15)   # yellow eyes
+        put(b, 24 + s * 3, hy - 3, 1)
+    if f:                                                   # maw open
+        ell(b, 24, hy + 4, 5, 3, 13)
+        ell(b, 24, hy + 4, 3.5, 1.6, 12)
+        for x in (21, 23, 25, 27):
+            put(b, x, hy + 2, 5)
+    else:
+        line(b, 19, hy + 3, 29, hy + 3, 1)
+    for s in (-1, 1):                                       # bone tusks curling out and down
+        path(b, [(24 + s * 4, hy + 2), (24 + s * 7, hy + 5), (24 + s * 8, hy + 8), (24 + s * 6, hy + 9)], 6)
+        put(b, 24 + s * 6, hy + 10, 5)
+    return add_outline(b)
+
+
+RUNE_COLS = [(8, 5, 3), (12, 15, 13), (10, 11, 9), (15, 6, 7)]   # double damage, haste, regeneration, bounty
+
+
+def rune(k, size=16):
+    """a power rune: a glowing crystal diamond with a bright facet; the bounty rune a gold coin.
+    size 8 gives the mark shown over a hero while the rune lasts."""
+    b = bmp(size, size)
+    mid, lit, dark = RUNE_COLS[k]
+    c = size / 2.0
+    r = size * 0.42
+    if size == 16:
+        for y in range(16):                               # faint glow ring
+            for x in range(16):
+                d = math.hypot(x + 0.5 - c, y + 0.5 - c)
+                if 6.6 < d < 7.6 and (x + y) % 2:
+                    b[y][x] = mid
+    for y in range(size):
+        for x in range(size):
+            dx, dy = x + 0.5 - c, y + 0.5 - c
+            if k == 3:
+                inside = dx * dx + dy * dy <= (r * 0.95) ** 2
+            else:
+                inside = abs(dx) / 0.8 + abs(dy) <= r
+            if inside:
+                b[y][x] = lit if dx + dy < -size * 0.12 else (dark if dx + dy > size * 0.2 else mid)
+    if k == 3:                                            # the coin's mark
+        if size == 16:
+            line(b, 8, 5, 8, 10, 7)
+            line(b, 6, 6, 10, 6, 7)
+            line(b, 6, 9, 10, 9, 7)
+        put(b, int(c) - 2, int(c) - 2, 5)
+    else:
+        put(b, int(c) - 1, int(c) - (3 if size == 16 else 2), 5)
+        if size == 16:
+            put(b, 7, 5, 5)
+            put(b, 6, 6, 5)
+    return add_outline(b)
+
+
+def aegis():
+    """the Aegis of the Immortal over its holder: a small gold shield"""
+    return add_outline(from_ascii(["........", ".5f6f6..", ".f6f6f..", ".6fef6..", ".f6f6f..", "..6f6...", "...f....", "........"], 8))
+
+
+def stamp_pit(img, wx, wy):
+    """Roshan's pit, 80x80 at world (wx, wy): a ring of dark stone blocks round a sunken slab floor"""
+    for y in range(80):
+        for x in range(80):
+            d = math.hypot(x + 0.5 - 40, y + 0.5 - 40)
+            if d >= 40:
+                continue
+            px, py = wx + x, wy + y
+            if d >= 39:
+                c = 1
+            elif d >= 33:                                   # the wall: blocks lit from the top left
+                a = math.atan2(y + 0.5 - 40, x + 0.5 - 40)
+                blk = int((a + math.pi) / (2 * math.pi) * 28)
+                edge = int(((a + math.pi) / (2 * math.pi) * 28 - blk) * 8) == 0
+                c = 1 if edge or abs(d - 36) < 0.5 else (7 if (x + y) < 72 else 15)
+            else:
+                bx, by = px % 16, py % 16
+                c = 15 if bx == 0 or by == 0 else (14 if (bx * 3 + by * 5) % 11 else 15)
+                if d > 29 and (x + y) < 80:
+                    c = 14 if (x + y) % 2 else 1                # the wall's shadow on the floor
+            img[y][x] = c
+
+
 def ancient():
     b = bmp(48, 48)
     poly = [(14, 3), (34, 3), (45, 14), (45, 34), (34, 45), (14, 45), (3, 34), (3, 14)]
@@ -2265,6 +2438,7 @@ def lane_dist(x, y):
 TOWERS_RAD = [(104, 336), (104, 640), (432, 592), (296, 728), (688, 920), (384, 920)]
 ANCIENT_RAD = (176, 848)
 FOUNTAIN_RAD = (64, 960)
+ROSH_PIT = (288, 288)
 
 
 def rot(p):
@@ -2560,7 +2734,7 @@ def stamp_fountain(img, x0, y0):
                 c = 13
             else:
                 c = 12 if (int(d * 2) + (x // 4)) % 5 else 13
-            img[y0 + y][x0 + x] = c
+            img[y][x] = c
 
 
 def minimap():
@@ -2619,6 +2793,23 @@ define("T_ANCIENT", add_sprite([r[0:24] for r in an[0:24]]))
 add_sprite([r[24:48] for r in an[0:24]])
 add_sprite([r[0:24] for r in an[24:48]])
 add_sprite([r[24:48] for r in an[24:48]])
+for f in range(2):                               # Roshan: stand, slam; 48x48 as four 24x24 sprites
+    rb = roshan(f)
+    first = add_sprite([r[0:24] for r in rb[0:24]])
+    if f == 0:
+        define("T_ROSH", first)
+    add_sprite([r[24:48] for r in rb[0:24]])
+    add_sprite([r[0:24] for r in rb[24:48]])
+    add_sprite([r[24:48] for r in rb[24:48]])
+define("ROSH_X", ROSH_PIT[0])
+define("ROSH_Y", ROSH_PIT[1])
+define("T_RUNE", add_sprite(rune(0)))           # 16x16: double damage, haste, regeneration, bounty
+for k in range(1, 4):
+    add_sprite(rune(k))
+define("T_RUNEM", add_sprite(rune(0, 8)))       # 8x8 marks over a hero
+for k in range(1, 3):
+    add_sprite(rune(k, 8))
+define("T_AEGIS", add_sprite(aegis()))
 define("T_RAZE", add_sprite(raze_frame(0)))
 add_sprite(raze_frame(1))
 add_sprite(raze_frame(2))
@@ -2820,6 +3011,23 @@ for fx, fy in (FOUNTAIN_RAD, rot(FOUNTAIN_RAD)):
                 tiles.append(t)
                 dedupe[t] = len(tiles)
             map_ground[((y0 >> 3) + ty) * 128 + (x0 >> 3) + tx] = dedupe[t]
+# Roshan's pit, on the river between the top lane and mid (the same way from both fountains)
+x0, y0 = ROSH_PIT[0] - 40, ROSH_PIT[1] - 40
+img = bmp(80, 80)
+for ty in range(10):
+    for tx in range(10):
+        t = tiles[map_ground[((y0 >> 3) + ty) * 128 + (x0 >> 3) + tx] - 1]
+        for r in range(8):
+            for c in range(8):
+                img[ty * 8 + r][tx * 8 + c] = (t[r] >> (28 - c * 4)) & 15
+stamp_pit(img, x0, y0)
+for ty in range(10):
+    for tx in range(10):
+        t = tile_at(img, tx, ty)
+        if t not in dedupe:
+            tiles.append(t)
+            dedupe[t] = len(tiles)
+        map_ground[((y0 >> 3) + ty) * 128 + (x0 >> 3) + tx] = dedupe[t]
 assert len(tiles) < 1280, len(tiles)
 assert len(tiles) + 1 + 9 * 18 <= 1280, ("draft hero frames overflow into plane A", len(tiles))
 
