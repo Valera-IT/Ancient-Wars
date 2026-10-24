@@ -260,7 +260,7 @@ BAYER = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]]
 
 
 # ---------------------------------------------------------------- palettes
-# map: 2-4 grass (2/5/3 on the Dire side), 5/2/6 tree crowns, 8-10 orange dirt, 11-13 river, 14/15/7 Dire stone
+# map: 2-4 grass (5/2/14 on the Dire side), 5/2/6 tree crowns, 8-10 orange dirt, 11-13 river, 14/15/7 Dire stone
 PAL_MAP = [(0, 0, 0), (0, 0, 0), (0, 3, 1), (1, 4, 1), (2, 5, 1), (0, 2, 1), (3, 6, 2), (3, 3, 6),
            (4, 2, 1), (7, 4, 1), (7, 6, 3), (0, 1, 4), (1, 3, 7), (4, 6, 7), (0, 0, 1), (2, 2, 4)]
 PAL_UI = [(0, 0, 0), (0, 0, 0), (7, 7, 7), (5, 7, 7), (3, 6, 7), (2, 4, 7), (7, 7, 2), (7, 4, 0),
@@ -2373,7 +2373,7 @@ def periodic_tex(seed, base, flecks, n, blades):
 
 
 TEX_GRASS = [periodic_tex(1, 3, [2, 4, 4], 22, True), periodic_tex(2, 3, [4, 2, 4], 18, True)]
-TEX_ASH = [periodic_tex(3, 2, [5, 3, 5], 22, True), periodic_tex(4, 2, [3, 5, 5], 18, True)]   # the Dire: darker grass
+TEX_ASH = [periodic_tex(3, 5, [2, 14, 2], 22, True), periodic_tex(4, 5, [2, 2, 14], 18, True)]   # the Dire: darker grass
 TEX_DIRT = [periodic_tex(5, 9, [10, 10, 8], 18, False)]
 TEX_WATER = [[12] * 16 for _ in range(16)]
 for y in range(16):
@@ -2517,8 +2517,6 @@ def pixel(px, py, s, var):
             c = 13 if (lx + ly) % 3 else 12                # foam rim
         elif field(WATER, px - 3, py - 3) < 0.5:
             c = 11                                          # bank shadow
-    elif s and field(WATER, px - 7, py + 11) >= 0.5:
-        c = 1 if px % 4 == 0 else 14                        # the Dire bank: a dark cliff face
     if fb >= 0.5:
         c = slab(px, py, 10, 10, 9) if not s else slab(px, py, 15, 15, 14)
         if fb < 0.58:
