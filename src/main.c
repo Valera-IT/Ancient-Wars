@@ -439,6 +439,7 @@ typedef struct {
     u8 sk[4], pts;      /* learned levels: three basic skills and the ultimate; unspent points */
     u8 call_t, helix_cd;
     u8 hold_k, hold_t;  /* a skill key held down to learn that skill (255 = none), frames held */
+    u8 stat, at[3], rate;   /* points in +1 to all attributes; STR, AGI, INT now; attack frames */
     u8 buf_t, heal_t, omni_n;   /* Blade Fury and Healing Ward frames left; Omnislash jumps left */
     u8 chan_t, chan_kind, hook_st, hook_t, ai_st, cast_lock, ai_lane, ai_t;
     s8 chan_tgt, hook_tgt;
@@ -709,11 +710,18 @@ static const char *const hero_short[NHERO] = { "SF   ", "PUDGE", "AXE  ", "SNIPR
                                                "CM   ", "DROW ", "VIPER", "JUGG " };
 /* base values and per-level growth */
 static const s16 st_hp[NHERO] = { 460, 600, 620, 530, 450, 440, 470, 450, 500, 580 };
-static const u8 st_hpl[NHERO] = { 46, 62, 66, 50, 44, 42, 44, 42, 48, 58 };
 static const s16 st_mp[NHERO] = { 230, 190, 180, 220, 300, 280, 300, 220, 230, 200 };
-static const u8 st_mpl[NHERO] = { 26, 20, 18, 24, 32, 30, 30, 22, 24, 20 };
 static const u8 st_dmg[NHERO] = { 30, 44, 42, 37, 28, 32, 28, 30, 34, 40 };
-static const u8 st_dml[NHERO] = { 3, 4, 4, 4, 3, 3, 3, 4, 3, 4 };
+/* Dota attributes: STR, AGI, INT at level 1 and their gain a level in tenths, the primary one.
+   Above level 1 each STR is +20 HP, each INT +12 mana, each AGI +1% attack speed and each
+   point of the primary attribute +1 damage; the st_ tables are the level 1 values */
+static const u8 at_base[NHERO][3] = { { 19, 20, 18 }, { 25, 14, 16 }, { 25, 20, 18 }, { 19, 21, 15 }, { 19, 11, 22 },
+                                      { 18, 23, 27 }, { 18, 16, 18 }, { 18, 22, 15 }, { 20, 21, 15 }, { 20, 26, 14 } };
+static const u8 at_gain[NHERO][3] = { { 27, 35, 22 }, { 30, 14, 18 }, { 28, 17, 16 }, { 20, 34, 26 }, { 21, 12, 33 },
+                                      { 22, 18, 32 }, { 22, 16, 33 }, { 19, 30, 14 }, { 24, 30, 18 }, { 22, 28, 14 } };
+enum { A_STR, A_AGI, A_INT };
+static const u8 at_prim[NHERO] = { A_AGI, A_STR, A_STR, A_AGI, A_INT, A_INT, A_INT, A_AGI, A_AGI, A_AGI };
+#define MAX_LVL 30
 static const u8 st_rng[NHERO] = { 80, 20, 20, 96, 72, 76, 70, 90, 80, 20 };
 static const u8 st_spd[NHERO] = { 21, 19, 22, 20, 20, 21, 19, 21, 21, 23 };
 static const u8 st_rate[NHERO] = { 50, 56, 54, 52, 56, 54, 58, 52, 52, 50 };
@@ -749,7 +757,7 @@ static u8 passive(u8 kind, u8 k)
 
 static u8 ult_lv(u8 i) { return hr[i].sk[3]; }
 static u8 sk_max(u8 k) { return k == 3 ? 3 : 4; }
-static u8 sk_need(u8 i, u8 k) { u8 l = hr[i].sk[k]; return k == 3 ? 6 + l * 5 : 1 + (l << 1); }
+static u8 sk_need(u8 i, u8 k) { u8 l = hr[i].sk[k]; return k == 3 ? 6 + l * 6 : 1 + (l << 1); }   /* ultimate 6/12/18 */
 static u8 souls_max(u8 i) { return hr[i].sk[1] * 5; }
 
 static s16 times(s16 a, u8 n) { s16 r = 0; while (n--) r += a; return r; }   /* no __mulsi3 */
@@ -773,13 +781,22 @@ static void hero_poses(void)
         }
 }
 
-static u8 can_learn(u8 i, u8 k) { Hero *H = &hr[i]; return H->pts && H->sk[k] < sk_max(k) && H->lvl >= sk_need(i, k); }
+/* k = 0-3 a skill, 4 = +1 to all attributes, which takes any point */
+static u8 can_learn(u8 i, u8 k)
+{
+    Hero *H = &hr[i];
+    return H->pts && (k == 4 || (H->sk[k] < sk_max(k) && H->lvl >= sk_need(i, k)));
+}
+/* the skill a key learns: Shadow Fiend's three Shadowraze keys all level Shadowraze */
+static u8 key_skill(u8 i, u8 k) { return hk[i] == K_SF && k < 3 ? 0 : k; }
+static void refresh_max(u8 i);
 
 static u8 learn(u8 i, u8 k)
 {
     Hero *H = &hr[i];
     if (!can_learn(i, k)) return 0;
-    H->sk[k]++;
+    if (k == 4) { H->stat++; refresh_max(i); }
+    else H->sk[k]++;
     H->pts--;
     hud_dirty = 1;
     return 1;
@@ -794,26 +811,27 @@ static void bot_learn(u8 i)
     while (hr[i].pts) {
         for (k = 0; k < 4; k++)
             if (learn(i, order[hk[i]][k])) break;
-        if (k == 4) return;
+        if (k == 4) learn(i, 4);            /* nothing to level: attributes */
     }
 }
 
 static s16 calc_hpmax(u8 i)
 {
     Hero *H = &hr[i];
-    s16 v = st_hp[hk[i]] + times(st_hpl[hk[i]], H->lvl);
+    s16 v = st_hp[hk[i]] + times(20, H->at[A_STR] - at_base[hk[i]][A_STR]);
     if (hk[i] == K_PUDGE) v += times(20, H->heap);
     if (H->items & IT_VIT) v += 200;
     if (H->items & IT_BRACER) v += 80;
     return v;
 }
 
-static s16 calc_mpmax(u8 i) { return st_mp[hk[i]] + times(st_mpl[hk[i]], hr[i].lvl); }
+static s16 calc_mpmax(u8 i) { return st_mp[hk[i]] + times(12, hr[i].at[A_INT] - at_base[hk[i]][A_INT]); }
 
 static s16 atk_dmg(u8 i)
 {
     Hero *H = &hr[i];
-    s16 d = st_dmg[hk[i]] + times(st_dml[hk[i]], H->lvl);
+    u8 a = at_prim[hk[i]];
+    s16 d = st_dmg[hk[i]] + H->at[a] - at_base[hk[i]][a];
     if (hk[i] == K_SF) d += H->souls << 1;
     if (hk[i] == K_DROW) d += (H->sk[0] << 1) + (H->sk[3] << 3);      /* Frost Arrows, Marksmanship */
     if (H->items & IT_BLADES) d += 10;
@@ -840,7 +858,7 @@ static s16 hero_spd(u8 i)
 static u8 unit_rate(u8 i)
 {
     switch (un[i].type) {
-    case U_HERO: return st_rate[hk[i]] - (hk[i] == K_LINA ? hr[i].sk[2] << 2 : 0);
+    case U_HERO: return hr[i].rate - (hk[i] == K_LINA ? hr[i].sk[2] << 2 : 0);
     case U_MELEE: return 60;
     case U_RANGED: return 66;
     default: return 56;
@@ -849,7 +867,14 @@ static u8 unit_rate(u8 i)
 
 static void refresh_max(u8 i)
 {
-    s16 n = calc_hpmax(i), m = calc_mpmax(i);
+    Hero *H = &hr[i];
+    u8 a, kind = hk[i];
+    s16 n, m;
+    for (a = 0; a < 3; a++)         /* the base, the gain over the levels above 1, the + points */
+        H->at[a] = at_base[kind][a] + divs(times(at_gain[kind][a], H->lvl - 1), 10) + H->stat;
+    H->rate = divs(times(st_rate[kind], 100), 100 + H->at[A_AGI] - at_base[kind][A_AGI]);
+    n = calc_hpmax(i);
+    m = calc_mpmax(i);
     un[i].hp += n - un[i].hpmax;
     un[i].hpmax = n;
     hr[i].mana += m - hr[i].manamax;
@@ -861,7 +886,7 @@ static void give_xp(u8 i, u16 v)
 {
     Hero *H = &hr[i];
     H->xp += v;
-    while (H->lvl < 16 && H->xp >= 140 + H->lvl * 60) {
+    while (H->lvl < MAX_LVL && H->xp >= 140 + H->lvl * 60) {
         H->xp -= 140 + H->lvl * 60;
         H->lvl++;
         H->pts++;
@@ -1824,12 +1849,12 @@ static void player_cmd(u8 i, Cmd *c)
         if (!(p & key_bit[k])) { c->cast |= 1 << k; H->hold_k = 255; }
         else if ((H->hold_t += DT) >= 30) {
             H->hold_k = 255;
-            if (learn(i, k)) sfx_play(SFX_PICKUP);
+            if (learn(i, key_skill(i, k))) sfx_play(SFX_PICKUP);
         }
     }
     for (u8 k = 0; k < 4; k++)
         if (n & key_bit[k]) {
-            if (can_learn(i, k) && H->hold_k > 3) { H->hold_k = k; H->hold_t = 0; }
+            if (can_learn(i, key_skill(i, k)) && H->hold_k > 3) { H->hold_k = k; H->hold_t = 0; }
             else if (H->hold_k != k) c->cast |= 1 << k;
         }
 }
@@ -2404,14 +2429,17 @@ static void split_menu(u8 xo, u8 k)
     const char *n;
     char b[24];
     u8 j = 0, m;
-    if (shop_open && shop_sel > 3) k++;         /* four rows: scroll to the fifth item */
-    n = shop_open ? items[k] : skill_name[hk[me]][k];
+    if (shop_sel > 3) k++;                      /* four rows: scroll to the fifth item */
+    n = shop_open ? items[k] : (k == 4 ? "+1 ATTRIBUTES   " : skill_name[hk[me]][k]);
     b[j++] = shop_sel == k ? '>' : ' ';
     for (m = 0; m < 12; m++) b[j++] = *n++;
     b[j++] = ' ';
     if (shop_open) {
         if (H->items & (1 << k)) { b[j++] = 'O'; b[j++] = 'W'; b[j++] = 'N'; }
         else { num(item_price[k], 4, b + j); j += 4; }
+    } else if (k == 4) {
+        b[j++] = '+';
+        num(H->stat, 2, b + j); j += 2;
     } else if (H->sk[k] < sk_max(k) && H->lvl < sk_need(me, k)) {
         b[j++] = 'L'; b[j++] = 'V';
         num(sk_need(me, k), 2, b + j); j += 2;
@@ -2493,7 +2521,7 @@ static void split_hud(u8 part, u8 only)
             abilities(xo + 12, 2, k ? T_SKI2 : T_SKI);
         } else if (part == 2) {         /* XP, items, gold, Blink Dagger, skill points */
             u16 need = 140 + times(60, H->lvl);
-            bar_tiles(xo + 3, 26, 5, H->lvl >= 16 ? 1 : H->xp, H->lvl >= 16 ? 1 : need, T_XPBAR);
+            bar_tiles(xo + 3, 26, 5, H->lvl >= MAX_LVL ? 1 : H->xp, H->lvl >= MAX_LVL ? 1 : need, T_XPBAR);
             for (x = y = 0; x < NITEM; x++)    /* marks of the first four items owned */
                 if ((H->items & (1 << x)) && y < 4) wtile(xo + 8 + y++, 26, ATTR(1, 1, T_MINIIT + x));
             for (; y < 4; y++) wtile(xo + 8 + y, 26, ATTR(1, 1, T_FONTW));
@@ -2539,7 +2567,7 @@ static void abilities(u8 x0, u8 step, u16 tski)
     char b[4];
     for (k = 0; k < 4; k++, x += step) {
         u8 sk = kind == K_SF && k < 3 ? 0 : k, lv = H->sk[sk], j, st[4];
-        u8 up = !H->bot && can_learn(view, k), blink = up && (vcount & 32);   /* learnable: flashes */
+        u8 up = !H->bot && can_learn(view, sk), blink = up && (vcount & 32);   /* learnable: flashes */
         wicon(x, 24, lv || blink ? ATTR(2, 1, tski + (sk << 2)) : ATTR(2, 1, T_LOCK));
         if (!lv) { b[0] = b[1] = ' '; }
         else if (kind == K_PUDGE && k == 1) { b[0] = 'O'; b[1] = H->rot ? 'N' : 'F'; }
@@ -2551,8 +2579,7 @@ static void abilities(u8 x0, u8 step, u16 tski)
         if (up && b[1] == ' ' && blink) b[1] = '+';      /* not over a cooldown or Rot's ON/OF */
         b[2] = 0;
         textW(x, 26, b);
-        lv = H->sk[k];              /* the pips: the level of the skill this key learns (SF: C, X = passives) */
-        for (j = 0; j < 4; j++) st[j] = j < lv ? 2 : (j < sk_max(k) ? 1 : 0);
+        for (j = 0; j < 4; j++) st[j] = j < lv ? 2 : (j < sk_max(sk) ? 1 : 0);
         if (blink) st[lv] = 2;
         wtile(x, 27, ATTR(1, 1, T_PIPS + times(3, st[0]) + st[1]));
         wtile(x + 1, 27, ATTR(1, 1, T_PIPS + times(3, st[2]) + st[3]));
@@ -2578,7 +2605,7 @@ static void hud_part1(u8 part)
         }
         bar_tiles(12, 24, 6, U->on ? U->hp : 0, U->hpmax, T_HPBAR);
         bar_tiles(12, 25, 6, H->mana, H->manamax, T_MPBAR);
-        bar_tiles(12, 26, 6, H->lvl >= 16 ? 1 : H->xp, H->lvl >= 16 ? 1 : need, T_XPBAR);
+        bar_tiles(12, 26, 6, H->lvl >= MAX_LVL ? 1 : H->xp, H->lvl >= MAX_LVL ? 1 : need, T_XPBAR);
         b[0] = H->pts && !H->bot && (vcount & 32) ? '+' : ' ';   /* skill points to spend */
         b[1] = H->pts && !H->bot && (vcount & 32) ? '0' + H->pts : ' ';
         b[2] = 0;
@@ -2727,8 +2754,20 @@ static void learn_draw(void)
     u8 k, j;
     char b[12];
     if (split) { hud_dirty = 1; return; }
-    panelA(2, 38, 6, 14);
+    panelA(2, 38, 6, 16);
     textA_c(7, "- LEARN SKILL - A:LEARN START:EXIT");
+    textA(4, 13, shop_sel == 4 ? ">" : " ");
+    textA(6, 13, "+1 ALL ATTRIBUTES");
+    b[0] = '+';
+    num(H->stat, 2, b + 1);
+    b[3] = 0;
+    textA(24, 13, b);
+    {                               /* STR AGI INT now */
+        char a[40] = "STR     AGI     INT    ";
+        for (k = 3; k--; ) { num(H->at[k], 3, a + 4 + (k << 3)); a[7 + (k << 3)] = ' '; }   /* num ends the string */
+        a[23] = 0;
+        textA_c(15, a);
+    }
     for (k = 0; k < 4; k++) {
         u8 mx = sk_max(k);
         textA(4, 9 + k, shop_sel == k ? ">" : " ");
@@ -2745,7 +2784,8 @@ static void learn_draw(void)
     }
     b[0] = 'P'; b[1] = 'O'; b[2] = 'I'; b[3] = 'N'; b[4] = 'T'; b[5] = 'S'; b[6] = ' ';
     num(H->pts, 2, b + 7);
-    textA_c(14, b);
+    b[9] = 0;
+    textA_c(16, b);
     afont = T_FONT;
 }
 
@@ -3670,8 +3710,8 @@ static void match(u8 mode)
                 continue;
             }
             if (learn_open) {
-                if (H->pad_new & B_UP) shop_sel = (shop_sel + 3) & 3;
-                if (H->pad_new & B_DOWN) shop_sel = (shop_sel + 1) & 3;
+                if (H->pad_new & B_UP) shop_sel = shop_sel ? shop_sel - 1 : 4;     /* four skills, attributes */
+                if (H->pad_new & B_DOWN) shop_sel = shop_sel < 4 ? shop_sel + 1 : 0;
                 if (H->pad_new & (B_A | B_B | B_C)) sfx_play(learn(me, shop_sel) ? SFX_PICKUP : SFX_HIT);
                 if (!H->pts) { learn_open = 0; clear_band(); }
                 else if (H->pad_new & (B_UP | B_DOWN | B_A | B_B | B_C)) learn_draw();
