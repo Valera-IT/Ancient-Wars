@@ -438,6 +438,7 @@ typedef struct {
     u8 lvl, souls, heap, rot, items, kills, deaths, bot, six;
     u8 sk[4], pts;      /* learned levels: three basic skills and the ultimate; unspent points */
     u8 call_t, helix_cd;
+    u8 hold_k, hold_t;  /* a skill key held down to learn that skill (255 = none), frames held */
     u8 buf_t, heal_t, omni_n;   /* Blade Fury and Healing Ward frames left; Omnislash jumps left */
     u8 chan_t, chan_kind, hook_st, hook_t, ai_st, cast_lock, ai_lane, ai_t;
     s8 chan_tgt, hook_tgt;
@@ -772,10 +773,12 @@ static void hero_poses(void)
         }
 }
 
+static u8 can_learn(u8 i, u8 k) { Hero *H = &hr[i]; return H->pts && H->sk[k] < sk_max(k) && H->lvl >= sk_need(i, k); }
+
 static u8 learn(u8 i, u8 k)
 {
     Hero *H = &hr[i];
-    if (!H->pts || H->sk[k] >= sk_max(k) || H->lvl < sk_need(i, k)) return 0;
+    if (!can_learn(i, k)) return 0;
     H->sk[k]++;
     H->pts--;
     hud_dirty = 1;
@@ -866,7 +869,7 @@ static void give_xp(u8 i, u16 v)
         if (H->bot) bot_learn(i);
         if (i == view) {
             sfx_play(SFX_PICKUP);
-            if (!H->bot) msg(H->lvl == 6 ? "LEVEL 6 - START: LEARN ULTIMATE" : "LEVEL UP! START: LEARN SKILL", 120);
+            if (!H->bot) msg(H->lvl == 6 ? "LEVEL 6! HOLD Y TO LEARN THE ULTIMATE" : "LEVEL UP! HOLD A SKILL KEY TO LEARN", 120);
         }
     }
     hud_dirty = 1;
@@ -1788,6 +1791,8 @@ static s8 cs_target(u8 i, s16 r, s16 bonus)
     return -1;
 }
 
+static const u16 key_bit[4] = { B_B, B_C, B_X, B_Y };
+
 static void player_cmd(u8 i, Cmd *c)
 {
     Hero *H = &hr[i];
@@ -1811,8 +1816,22 @@ static void player_cmd(u8 i, Cmd *c)
             t = nearest(i, r + 4, F_CREEP | F_BLD);
         c->tgt = t;
     }
-    c->cast = ((n & B_B) ? 1 : 0) | ((n & B_C) ? 2 : 0) | ((n & B_X) ? 4 : 0) |
-              ((n & B_Y) ? 8 : 0) | ((n & B_Z) ? 16 : 0);
+    c->cast = (n & B_Z) ? 16 : 0;
+    /* B C X Y cast at once, unless that skill can be learned: then holding the key learns it
+       and a short press casts on release, as in Dota */
+    if (H->hold_k < 4) {
+        u8 k = H->hold_k;
+        if (!(p & key_bit[k])) { c->cast |= 1 << k; H->hold_k = 255; }
+        else if ((H->hold_t += DT) >= 30) {
+            H->hold_k = 255;
+            if (learn(i, k)) sfx_play(SFX_PICKUP);
+        }
+    }
+    for (u8 k = 0; k < 4; k++)
+        if (n & key_bit[k]) {
+            if (can_learn(i, k) && H->hold_k > 3) { H->hold_k = k; H->hold_t = 0; }
+            else if (H->hold_k != k) c->cast |= 1 << k;
+        }
 }
 
 /* Lane geometry for the bots: s is the distance along a lane from the Radiant Ancient. */
@@ -2519,8 +2538,9 @@ static void abilities(u8 x0, u8 step, u16 tski)
     u8 kind = hk[view], k, x = x0;
     char b[4];
     for (k = 0; k < 4; k++, x += step) {
-        u8 sk = kind == K_SF && k < 3 ? 0 : k, lv = H->sk[sk], mx = sk_max(sk), j, st[4];
-        wicon(x, 24, lv ? ATTR(2, 1, tski + (sk << 2)) : ATTR(2, 1, T_LOCK));
+        u8 sk = kind == K_SF && k < 3 ? 0 : k, lv = H->sk[sk], j, st[4];
+        u8 up = !H->bot && can_learn(view, k), blink = up && (vcount & 32);   /* learnable: flashes */
+        wicon(x, 24, lv || blink ? ATTR(2, 1, tski + (sk << 2)) : ATTR(2, 1, T_LOCK));
         if (!lv) { b[0] = b[1] = ' '; }
         else if (kind == K_PUDGE && k == 1) { b[0] = 'O'; b[1] = H->rot ? 'N' : 'F'; }
         else if (passive(kind, k)) { b[0] = b[1] = ' '; }
@@ -2528,9 +2548,12 @@ static void abilities(u8 x0, u8 step, u16 tski)
             u16 sec = divs(H->cd[k] + 59, 60);
             num(sec > 99 ? 99 : sec, 2, b);
         } else { b[0] = "BCXY"[k]; b[1] = ' '; }
+        if (up && b[1] == ' ' && blink) b[1] = '+';      /* not over a cooldown or Rot's ON/OF */
         b[2] = 0;
         textW(x, 26, b);
-        for (j = 0; j < 4; j++) st[j] = j < lv ? 2 : (j < mx ? 1 : 0);
+        lv = H->sk[k];              /* the pips: the level of the skill this key learns (SF: C, X = passives) */
+        for (j = 0; j < 4; j++) st[j] = j < lv ? 2 : (j < sk_max(k) ? 1 : 0);
+        if (blink) st[lv] = 2;
         wtile(x, 27, ATTR(1, 1, T_PIPS + times(3, st[0]) + st[1]));
         wtile(x + 1, 27, ATTR(1, 1, T_PIPS + times(3, st[2]) + st[3]));
     }
@@ -3331,6 +3354,7 @@ static void match_init(u8 mode)
         hr[k].bot = mode < 2 ? mode != k : mode == 2;   /* 2 = watch: all bots, 3 = split: none */
         hr[k].sk[0] = 1;        /* level 1 starts with the first skill learned */
         hr[k].chan_tgt = hr[k].hook_tgt = -1;
+        hr[k].hold_k = 255;
         un[k].type = U_HERO;
         un[k].team = k & 1;
         un[k].killer = -1;
@@ -3382,7 +3406,7 @@ static void tips_update(void)
     static const char *const tips[8] = {
         "TIP: D-PAD MOVES   A ATTACKS", "TIP: LAST HIT CREEPS WITH A FOR GOLD",
         "TIP: HIT YOUR OWN WEAK CREEP TO DENY", "TIP: B C X Y CAST YOUR SKILLS",
-        "TIP: LEVEL UP! START OPENS SKILLS", "TIP: LOW HP - RUN BACK TO FOUNTAIN",
+        "TIP: HOLD A SKILL KEY TO LEARN IT", "TIP: LOW HP - RUN BACK TO FOUNTAIN",
         "TIP: START AT FOUNTAIN OPENS THE SHOP", "TIP: 3-BUTTON PAD A+B=X B+C=Y A+C=Z" };
     Hero *H = &hr[me];
     Unit *U = &un[me];
