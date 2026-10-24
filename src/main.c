@@ -842,7 +842,20 @@ static s16 atk_dmg(u8 i)
     return d;
 }
 
-static s16 armor_cut(u8 t, s16 d) { return t < NH ? (s16)(muls(d, hr[t].amul) >> 8) : d; }   /* attacks on heroes */
+/* what an attack keeps, of 256: the hero's own armor, else Dota's 2 for melee creeps, 0 ranged,
+   12 for a T1 tower, 16 for a T2 and 23 for the Ancient */
+static s16 armor_cut(u8 t, s16 d)
+{
+    s16 m;
+    switch (un[t].type) {
+    case U_HERO: m = hr[t].amul; break;
+    case U_MELEE: m = 228; break;
+    case U_TOWER: m = bld_slot(t) & 1 ? 130 : 148; break;
+    case U_ANCIENT: m = 107; break;
+    default: return d;
+    }
+    return (s16)(muls(d, m) >> 8);
+}
 
 static s16 atk_range(u8 i)
 {
