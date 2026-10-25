@@ -1968,60 +1968,144 @@ def _barracks32():
 
 
 def wolf_frame(d, f):
-    """a grey jungle wolf, 16x16: d 0 = towards us, 1 = away, 2 = east; f = stride"""
-    b = bmp(16, 16)
-    shadow(b, 8, 14, 6, 2)
+    """a grey jungle wolf, 24x24: d 0 = towards us, 1 = away, 2 = east; f 0/1 = the two strides.
+    Shaggy grey fur lit from the top left, a dark stripe down the back, red eyes and white fangs"""
+    b = bmp(24, 24)
+    G = [2, 3, 4]
     if d == 2:
-        for k, x in enumerate((4, 6, 10, 12)):             # legs, alternating
-            off = (1 if (k + f) % 2 else -1)
-            line(b, x, 10, x + off, 13, 2)
-        ell(b, 8, 9, 5.5, 2.8, 3)
-        rect(b, 4, 7, 11, 7, 4)
-        path(b, [(3, 9), (1, 7), (0, 5)], 3)               # tail up
-        ell(b, 13, 7, 2.6, 2.2, 3)                         # head
-        rect(b, 14, 7, 15, 8, 2)                           # muzzle
-        put(b, 12, 4, 4); put(b, 13, 4, 4)                 # ears
-        put(b, 13, 6, 12)                                  # red eye
-        put(b, 15, 8, 1)
+        shadow(b, 12, 21, 9, 2)
+        for k, (x, ph) in enumerate(((6, 0), (8, 1), (15, 1), (17, 0))):   # legs: near pair darker
+            off = 2 if (ph + f) % 2 else -1
+            c = 2 if k in (0, 2) else 3
+            line(b, x, 14, x + off, 20, c, 2)
+            put(b, x + off + 1, 20, 2)
+        path(b, [(5, 12), (2, 10), (1, 7), (2, 5)], 3, 2)                  # bushy tail, curled up
+        put(b, 2, 4, 4); put(b, 1, 6, 4)
+        shade_sphere(b, 11, 12, 0, G, 7.5, 4)                               # body
+        shade_sphere(b, 7, 12, 0, G, 3.5, 3.5)                              # haunch
+        for x in range(6, 17, 2):                                          # shaggy back
+            put(b, x, 8, 4); put(b, x + 1, 8, 2)
+        line(b, 6, 9, 15, 9, 2)
+        shade_sphere(b, 17, 10, 0, G, 3.5, 4)                               # neck ruff
+        shade_sphere(b, 19, 9, 0, G, 3, 2.6)                                # head
+        rect(b, 20, 9, 23, 11, 3)                                          # muzzle
+        line(b, 20, 11, 23, 11, 2)
+        put(b, 23, 9, 1)                                                   # nose
+        put(b, 22, 12, 5); put(b, 20, 12, 5)                               # fangs
+        path(b, [(17, 7), (17, 4), (19, 6)], 4)                            # ear
+        put(b, 18, 5, 2)
+        put(b, 20, 8, 12)                                                  # eye
+    elif d == 0:
+        shadow(b, 12, 21, 8, 2)
+        lift = (0, 2) if f else (2, 0)
+        for k, x in enumerate((7, 15)):                                     # hind legs
+            rect(b, x, 15, x + 1, 19, 2)
+        for k, x in enumerate((9, 13)):                                     # forelegs
+            rect(b, x, 15 - lift[k], x + 1, 20 - lift[k], 3)
+            rect(b, x, 20 - lift[k], x + 1, 20 - lift[k], 2)
+        shade_sphere(b, 12, 13, 0, G, 6, 4.5)                               # body seen head-on
+        shade_sphere(b, 12, 11, 0, G, 5, 3.5)                               # ruff
+        shade_sphere(b, 12, 8, 0, G, 4, 3.5)                                # head
+        path(b, [(8, 7), (7, 2), (10, 5)], 3); put(b, 8, 4, 2)             # ears
+        path(b, [(16, 7), (17, 2), (14, 5)], 3); put(b, 16, 4, 2)
+        rect(b, 10, 10, 14, 12, 4)                                         # muzzle
+        rect(b, 11, 10, 13, 10, 1)                                         # nose
+        put(b, 10, 13, 5); put(b, 14, 13, 5)                               # fangs
+        line(b, 11, 13, 13, 13, 13)
+        put(b, 9, 8, 12); put(b, 15, 8, 12)                                # eyes
     else:
-        lift = (0, 1) if f else (1, 0)
-        for k, x in enumerate((5, 10)):
-            rect(b, x, 10 - lift[k], x + 1, 13 - lift[k], 2)
-        ell(b, 8, 9, 4, 3.5, 3)
-        rect(b, 6, 7, 10, 7, 4)
-        if d == 0:
-            ell(b, 8, 6, 3.2, 2.8, 4)
-            rect(b, 7, 7, 9, 9, 3)
-            put(b, 8, 9, 1)
-            put(b, 6, 5, 12); put(b, 10, 5, 12)
-            put(b, 5, 3, 3); put(b, 11, 3, 3)
-        else:
-            path(b, [(8, 12), (9, 14), (8, 15)], 3)
-            ell(b, 8, 5, 3, 2.6, 3)
-            put(b, 6, 2, 4); put(b, 10, 2, 4)
+        shadow(b, 12, 21, 8, 2)
+        lift = (0, 2) if f else (2, 0)
+        for k, x in enumerate((8, 14)):
+            rect(b, x, 15 - lift[k], x + 1, 20 - lift[k], 2)
+        shade_sphere(b, 12, 13, 0, G, 5.5, 6)                               # back, seen from behind
+        line(b, 12, 8, 12, 17, 2)                                          # dark stripe
+        for y in range(9, 17, 2):
+            put(b, 10, y, 4); put(b, 14, y, 4)
+        path(b, [(12, 18), (13, 21), (12, 23)], 3, 2)                      # tail down
+        shade_sphere(b, 12, 6, 0, G, 3.5, 3)                                # back of the head
+        path(b, [(9, 5), (8, 1), (11, 3)], 3)
+        path(b, [(15, 5), (16, 1), (13, 3)], 3)
     return add_outline(b)
 
 
 def ogre_frame(d, f):
-    """a hulking jungle ogre, 16x16, skin brown, a club over the shoulder; f swings it"""
-    b = bmp(16, 16)
-    shadow(b, 8, 14, 6, 2)
-    legs(b, d, f, 8, 11, 14, 2)
-    ell(b, 8, 8, 5.5, 4.2, 7)                              # the belly and chest
-    ell(b, 6.5, 7, 3, 2.5, 6)
-    rect(b, 3, 10, 13, 11, 13)                             # loincloth
-    ell(b, 8 + (1 if d == 2 else 0), 3.5, 2.6, 2.4, 7)
-    if d == 0:
-        put(b, 7, 3, 1); put(b, 9, 3, 1)
-        rect(b, 7, 5, 9, 5, 5)                             # tusks
-    cx = 13 if d != 2 else 12
-    if f:                                                  # club swung down in front
-        line(b, cx - 1, 9, cx + 2, 14, 2, 2)
-        disc(b, cx + 2, 14, 1.6, 3)
-    else:                                                  # club over the shoulder
-        line(b, cx, 9, cx + 1, 2, 2, 2)
-        disc(b, cx + 1, 2, 1.8, 3)
+    """a hulking jungle ogre, 24x24, after the Dota ogre bruiser: a big blue-grey body, a small head
+    sunk between huge shoulders, a red loincloth, tusks and a spiked wooden club; f 0/1 = strides"""
+    b = bmp(24, 24)
+    S = [2, 8, 4]                                                          # skin: dark, blue, light
+    shadow(b, 12, 21, 9, 2)
+    if d == 2:
+        for k, x in enumerate((9, 14)):                                    # stumpy legs
+            off = (2 if (k + f) % 2 else -2)
+            rect(b, x + off, 16, x + off + 2, 20, 2 if k == 0 else 8)
+            rect(b, x + off, 20, x + off + 3, 20, 2)
+        shade_sphere(b, 11, 12, 0, S, 6, 5.5)                               # torso, hunched
+        rect(b, 6, 16, 16, 17, 13)                                         # loincloth
+        line(b, 6, 16, 16, 16, 12)
+        shade_sphere(b, 15, 6, 0, S, 3.4, 3.2)                              # head thrust forward
+        line(b, 15, 4, 18, 4, 2)                                           # brow
+        put(b, 17, 5, 12)
+        put(b, 18, 8, 5); put(b, 17, 9, 5)                                 # tusk
+        line(b, 14, 12, 19, 10 if f else 13, 8, 2)                         # arm
+        if f:                                                              # the club swung down
+            line(b, 19, 10, 23, 15, 7, 2)
+            disc(b, 22, 16, 2, 14); put(b, 23, 14, 6); put(b, 21, 18, 6)
+        else:                                                              # or raised
+            line(b, 19, 13, 22, 5, 7, 2)
+            disc(b, 22, 5, 2.2, 14); put(b, 23, 3, 6); put(b, 21, 3, 6)
+    else:
+        lift = (0, 2) if f else (2, 0)
+        for k, x in enumerate((8, 13)):                                    # stumpy legs
+            rect(b, x, 17 - lift[k], x + 2, 20 - lift[k], 2)
+            rect(b, x - 1, 20 - lift[k], x + 3, 20 - lift[k], 2)
+        shade_sphere(b, 12, 12, 0, S, 6.5, 5.5)                             # the great torso
+        rect(b, 7, 16, 16, 17, 13)                                         # loincloth
+        line(b, 7, 16, 16, 16, 12)
+        shade_sphere(b, 5, 9, 0, S, 2.2, 2.2)                               # shoulders
+        shade_sphere(b, 19, 9, 0, S, 2.2, 2.2)
+        line(b, 4, 11, 3, 16, 8, 2)                                        # left arm, fist
+        disc(b, 3.5, 17, 1.6, 2)
+        if d == 0:
+            shade_sphere(b, 12, 6, 0, S, 3.6, 3.4)                          # the head, between the shoulders
+            line(b, 10, 5, 14, 5, 2)                                       # heavy brow
+            put(b, 10, 6, 12); put(b, 14, 6, 12)
+            line(b, 11, 8, 13, 8, 1)                                       # mouth and tusks
+            put(b, 10, 9, 5); put(b, 14, 9, 5); put(b, 10, 8, 5); put(b, 14, 8, 5)
+            line(b, 10, 13, 14, 13, 2)                                     # belly crease
+        else:
+            shade_sphere(b, 12, 6, 0, S, 3.4, 3)
+            line(b, 12, 9, 12, 15, 2)                                      # spine
+        cy = 3 if not f else 9                                             # the club in the right hand
+        line(b, 20, 11, 20, cy + 2, 7, 2)
+        disc(b, 20.5, cy, 2.2, 14)
+        put(b, 22, cy, 6); put(b, 20, cy - 2, 6); put(b, 18, cy, 6)
     return add_outline(b)
+
+
+def camp_patch():
+    """the neutral camp, 32x24, drawn under the creeps: a trampled dirt clearing ringed with stones,
+    a smouldering fire in the middle, bones and a fallen log"""
+    b = bmp(32, 24)
+    for y in range(24):
+        for x in range(32):
+            d = ((x + 0.5 - 16) / 15.5) ** 2 + ((y + 0.5 - 12) / 10.5) ** 2
+            if d <= 1 and (d < 0.78 or (x + y) % 2 == 0):
+                b[y][x] = 14 if d > 0.6 or (x * 7 + y * 3) % 13 == 0 else 7
+    for k in range(14):                                                    # the ring of stones
+        a = k * 2 * math.pi / 14
+        x, y = 16 + math.cos(a) * 13.5, 12 + math.sin(a) * 9
+        disc(b, x, y, 1.3, 3)
+        put(b, int(x) - 1, int(y) - 1, 4)
+    line(b, 12, 15, 20, 11, 2, 2)                                          # the fire: crossed logs
+    line(b, 12, 11, 20, 15, 1, 2)
+    disc(b, 16, 12, 2.2, 12)
+    disc(b, 16, 11.5, 1.2, 15)
+    put(b, 16, 9, 15); put(b, 15, 8, 12)
+    line(b, 5, 17, 9, 19, 6); put(b, 5, 16, 6); put(b, 9, 20, 6)         # a bone
+    line(b, 22, 5, 27, 7, 13, 2)                                           # a log
+    put(b, 27, 6, 6)
+    return b
 
 
 # ---------------------------------------------------------------- Roshan, runes, the Aegis
@@ -2907,12 +2991,6 @@ for f in range(2):                               # Roshan: stand, slam; 48x48 as
     add_sprite([r[24:48] for r in rb[0:24]])
     add_sprite([r[0:24] for r in rb[24:48]])
     add_sprite([r[24:48] for r in rb[24:48]])
-for name, fn in (("T_WOLF", wolf_frame), ("T_OGRE", ogre_frame)):   # one frame a direction: they bob as they walk
-    first = None
-    for d in range(3):
-        i = add_sprite(fn(d, 0))
-        first = first or i
-    define(name, first)
 define("T_RAX", add_sprite(barracks()))
 define("ROSH_X", ROSH_PIT[0])
 define("ROSH_Y", ROSH_PIT[1])
@@ -3142,6 +3220,25 @@ for ty in range(10):
             dedupe[t] = len(tiles)
         map_ground[((y0 >> 3) + ty) * 128 + (x0 >> 3) + tx] = dedupe[t]
 assert len(tiles) < 1280, len(tiles)
+# match-only sprites go after the hero pose slots and the HUD art (6 * 16 + 50), loaded at the match start
+match_tiles = []
+
+
+def add_match(b):
+    start = len(match_tiles)
+    for tx in range(len(b[0]) // 8):
+        for ty in range(len(b) // 8):
+            match_tiles.append(tile_at(b, tx, ty))
+    return start
+
+
+for name, fn in (("NA_WOLF", wolf_frame), ("NA_OGRE", ogre_frame)):   # dir * 18 + stride * 9
+    define(name, add_match(fn(0, 0)))
+    for d, f in ((0, 1), (1, 0), (1, 1), (2, 0), (2, 1)):
+        add_match(fn(d, f))
+define("NA_CAMP", add_match(camp_patch()))
+define("MATCH_TILES", len(match_tiles))
+assert len(tiles) + 1 + 6 * 16 + 50 + len(match_tiles) <= 1280, ("match art overflows into plane A", len(match_tiles))
 assert len(tiles) + 1 + 9 * 32 <= 1280, ("draft hero frames overflow into plane A", len(tiles))
 
 walk = [0 if cells[y][x] == TREE else 1 for y in range(N) for x in range(N)]
@@ -3244,6 +3341,7 @@ out.append(f"#define HERO_ART_N {len(HERO_FNS)}")
 out.append(carr("hero_art", "u32", [v for t in hero_tiles for v in t], 8, "0x{:08X}"))
 out.append(carr("hero_port", "u32", [v for t in hero_port for v in t], 8, "0x{:08X}"))
 out.append(carr("skill_icons", "u32", [v for t in skill_icon_tiles for v in t], 8, "0x{:08X}"))
+out.append(carr("match_art", "u32", [v for t in match_tiles for v in t], 8, "0x{:08X}"))
 out.append("#endif")
 with open(OUT, "w") as f:
     f.write("\n".join(out) + "\n")

@@ -78,6 +78,7 @@ static void vdp_init(void)
 #define T_PORT (T_SKI + 16)          /* and its portrait, 3x3 */
 #define T_SKI2 (T_PORT + 9)          /* split screen: the same for the second player */
 #define T_PORT2 (T_SKI2 + 16)
+#define T_MATCH (T_PORT2 + 9)        /* the jungle creeps and the camp, loaded at the match start (the draft uses this room) */
 #define T_DICON 1984                 /* draft: the skills of the hero under the cursor (0xF800, past the hscroll table) */
 #define T_DHERO(k) ((k) < NHERO - 1 ? T_HSLOT + times(32, k) : T_DICON + 16)   /* draft: stand and attack poses; the last hero's fit up there */
 static void hero_tiles(u8 kind, u8 first, u8 n, u16 dst)
@@ -1552,9 +1553,10 @@ static void rosh_update(void)
 
 /* the jungle: wolves and ogres stand at their camp until somebody hits one; then the camp fights
    back, never strays more than 96 px, and walks home to heal. An emptied camp refills on the minute */
+static const s8 camp_ox[3] = { 0, -17, 17 }, camp_oy[3] = { -6, 2, 2 };   /* round the fire */
+
 static void camp_spawn(u8 k)
 {
-    static const s8 ox[3] = { 0, -14, 14 }, oy[3] = { -8, 8, 8 };
     u8 j, kind = k & 1 ? U_OGRE : U_WOLF;
     for (j = 0; j < (kind == U_OGRE ? 2 : 3); j++) {
         Unit *n = &un[NEUT + times(k, 3) + j];
@@ -1562,8 +1564,8 @@ static void camp_spawn(u8 k)
         n->on = 1;
         n->type = kind;
         n->team = 2;
-        n->x = FX(camp_x[k] + ox[j]);
-        n->y = FX(camp_y[k] + oy[j]);
+        n->x = FX(camp_x[k] + camp_ox[j + (kind == U_OGRE)]);   /* two ogres flank the fire */
+        n->y = FX(camp_y[k] + camp_oy[j + (kind == U_OGRE)]);
         n->face = 1;
         n->tgt = n->killer = -1;
         n->hpmax = n->hp = kind == U_OGRE ? 420 + times(14, game_min()) : 190 + times(7, game_min());
@@ -1587,8 +1589,8 @@ static void neutrals_update(void)
     for (i = NEUT; i < NU; i++) {
         Unit *n = &un[i];
         s8 t = n->tgt;
-        u8 k = neu_camp(i);
-        s16 x, y, hx = camp_x[k] + (i & 1 ? 10 : -10), hy = camp_y[k] + ((i % 3) << 3) - 8;
+        u8 k = neu_camp(i), j = i - NEUT - times(k, 3) + (n->type == U_OGRE);
+        s16 x, y, hx = camp_x[k] + camp_ox[j], hy = camp_y[k] + camp_oy[j];
         if (!n->on) continue;
         DECN(n->hit, DT);
         DECN(n->cd, DT);
@@ -3351,8 +3353,8 @@ static void draw_scene(void)
         case U_OGRE:            /* the jungle: in the Radiant palette, as Roshan */
             pal = 2;
             if (v->hit & 2) pal = 3;
-            de_add(y, x - 8, y - 12 - ((v->anim >> 2) & 1), 0x05,
-                   ATTR(pal, 0, (v->type == U_WOLF ? T_WOLF : T_OGRE) + sd * 4) | fl);
+            de_add(y, x - 12, y - 20, 0x0A,
+                   ATTR(pal, 0, T_MATCH + (v->type == U_WOLF ? NA_WOLF : NA_OGRE) + times(sd, 18) + ((v->anim >> 2) & 1) * 9) | fl);
             break;
         case U_RAX:
             de_add(y + 8, x - 12, y - 18, 0x0A, ATTR(pal, 0, T_RAX));
@@ -3377,6 +3379,12 @@ static void draw_scene(void)
             de_add(y + 16, x - 24, y, 0x0A, ATTR(pal, 0, T_ANCIENT + 18));
             de_add(y + 16, x, y, 0x0A, ATTR(pal, 0, T_ANCIENT + 27));
         }
+    }
+    /* the neutral camps: a clearing with a fire, under the creeps */
+    for (i = 0; i < NCAMP; i++) {
+        s16 cx = camp_x[i] - camx, cy = camp_y[i] - camy;
+        if (cx > -24 && cx < 344 && cy > -24 && cy < 240)
+            de_add(cy - 32, cx - 16, cy - 12, 0x0E, ATTR(2, 0, T_MATCH + NA_CAMP));
     }
     /* runes, bobbing */
     for (i = 0; i < 4; i++)
@@ -3913,6 +3921,11 @@ static void match_init(u8 mode)
     rosh_spawn();
     rax_down[0] = rax_down[1] = 0;
     for (k = 0; k < NCAMP; k++) camp_spawn(k);
+    {
+        u16 w;
+        VDP_CTRL32 = VRAM_W(T_MATCH << 5);
+        for (w = 0; w < MATCH_TILES * 8; w++) VDP_DATA32 = match_art[w];
+    }
     memset(rune_on, 0, sizeof(rune_on));
     rune_spawn(2, R_BOUNTY);            /* bounty runes at the horn, power runes from 2:00 */
     rune_spawn(3, R_BOUNTY);
