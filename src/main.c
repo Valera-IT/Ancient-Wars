@@ -414,7 +414,7 @@ enum { K_SF, K_PUDGE, K_AXE, K_SNIPER, K_ZEUS, K_LINA, K_CM, K_DROW, K_VIPER, K_
 #define K_GEN K_SNIPER     /* heroes from here on use the table-driven skills (skdef) */
 #define NH 6                     /* hero slots: Radiant 0, 2, 4 and Dire 1, 3, 5 */
 #define FIRST_BLD NH
-#define NBLD 20                  /* 10 a side: 6 towers, the Ancient, 3 barracks */
+#define NBLD 26                  /* 13 a side: 6 towers, the Ancient, 6 barracks (melee and ranged a lane) */
 #define FIRST_CREEP (FIRST_BLD + NBLD)
 #define ROSH (FIRST_CREEP + 42)   /* Roshan: neutral (team 2), in both teams' enemy lists */
 #define NEUT (ROSH + 1)           /* jungle neutrals: 4 camps of 3 slots, neutral like Roshan */
@@ -481,8 +481,8 @@ static const s8 dvx[8] = { 64, 45, 0, -45, -64, -45, 0, 45 };
 static const s8 dvy[8] = { 0, 45, 64, 45, 0, -45, -64, -45 };
 static const u8 face_of[9] = { 5, 6, 7, 4, 255, 0, 3, 2, 1 };
 /* Radiant buildings; the Dire ones are the same rotated by 180 degrees */
-static const s16 bld_x[10] = { 104, 104, 432, 296, 688, 384, 176, 140, 264, 300 };
-static const s16 bld_y[10] = { 336, 640, 592, 728, 920, 920, 848, 720, 808, 884 };
+static const s16 bld_x[13] = { 104, 104, 432, 296, 688, 384, 148, 76, 132, 200, 234, 240, 240 };
+static const s16 bld_y[13] = { 336, 640, 592, 728, 920, 920, 872, 790, 790, 790, 824, 892, 948 };
 /* the jungle camps: Radiant wolves, Radiant ogres, then the Dire ones (rotated) */
 static const s16 camp_x[NCAMP] = { 232, 536, 792, 488 };
 static const s16 camp_y[NCAMP] = { 552, 776, 472, 248 };
@@ -538,11 +538,11 @@ static void face_to(u8 i, u8 t)
     un[i].face = face_dir(PX(un[t].x) - PX(un[i].x), PX(un[t].y) - PX(un[i].y));
 }
 
-static const u8 slot_tab[NBLD] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+static const u8 slot_tab[NBLD] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
 static u8 bld_slot(u8 t) { return slot_tab[t - FIRST_BLD]; }
 /* the Dire buildings are the Radiant ones turned by 180 degrees, so their top slots stand on the bot lane */
 static u8 slot_lane(u8 team, u8 l) { return team ? 2 - l : l; }
-static u8 bld_lane(u8 t) { return slot_lane(un[t].team, (bld_slot(t) >= B_RAX ? bld_slot(t) - B_RAX : bld_slot(t) >> 1)); }
+static u8 bld_lane(u8 t) { return slot_lane(un[t].team, (bld_slot(t) >= B_RAX ? bld_slot(t) - B_RAX : bld_slot(t)) >> 1); }
 
 static u8 protected_bld(u8 t)
 {
@@ -551,7 +551,7 @@ static u8 protected_bld(u8 t)
     base = t - bld_slot(t);
     k = bld_slot(t);
     if (k == B_ANCIENT) return un[base + 1].on && un[base + 3].on && un[base + 5].on;
-    if (k >= B_RAX) return un[base + ((k - B_RAX) << 1) + 1].on;      /* barracks: behind the lane's T2 */
+    if (k >= B_RAX) return un[base + ((k - B_RAX) | 1)].on;      /* barracks: while the lane's T2 stands */
     return (k & 1) && un[t - 1].on;
 }
 
@@ -967,7 +967,7 @@ static const s16 rune_y[4] = { 400, 624, 472, 552 };
 static const u8 rune_secs[3] = { 45, 22, 30 };
 static const char *const rune_name[4] = { ": DOUBLE DAMAGE", ": HASTE", ": REGENERATION", ": BOUNTY" };
 
-static u8 rax_down[2];      /* each side's fallen barracks, bit = lane */
+static u8 rax_down[2];      /* each side's fallen barracks, bit = lane * 2 + (ranged) */
 static s16 game_min(void) { return divs(game_sec, 60); }
 static s16 rosh_dmg(void) { return 65 + times(3, game_min()); }
 static const u8 neu_tab[NCAMP * 3] = { 0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3 };
@@ -1126,11 +1126,11 @@ static void kill_unit(u8 t, s8 src)
         break;
     }
     case U_RAX: {
-        u8 l = bld_lane(t);
+        u8 l = (bld_lane(t) << 1) | ((bld_slot(t) - B_RAX) & 1);
         for (k = 0; k < nh; k++)
             if (un[k].team == eteam) { hr[k].gold += 120; hr[k].earned += 120; }
         rax_down[v->team] |= 1 << l;
-        msg(rax_down[v->team] == 7 ? (eteam ? "MEGA CREEPS FOR THE DIRE!" : "MEGA CREEPS FOR THE RADIANT!")
+        msg(rax_down[v->team] == 0x3F ? (eteam ? "MEGA CREEPS FOR THE DIRE!" : "MEGA CREEPS FOR THE RADIANT!")
                                    : (v->team ? "DIRE BARRACKS DESTROYED" : "RADIANT BARRACKS DESTROYED"), 150);
         debris(PX(v->x), PX(v->y) - 8, 14);
         sfx_play(SFX_BIGEXPL);
@@ -1355,7 +1355,7 @@ static void spawn_creep(u8 team, u8 type, u8 lane, u8 slot)
     c->x = FX(lane_x(lane, w) + slot_dx[slot]);
     c->y = FX(lane_y(lane, w) + slot_dy[slot]);
     c->hpmax = c->hp = (type == U_MELEE ? 110 : 75) + waves * 3;
-    c->sup = rax_down[team ^ 1] == 7 ? 2 : (rax_down[team ^ 1] >> lane) & 1;   /* the enemy barracks of this lane */
+    c->sup = rax_down[team ^ 1] == 0x3F ? 2 : (rax_down[team ^ 1] >> ((lane << 1) | (type == U_RANGED))) & 1;   /* the enemy melee or ranged barracks of this lane */
     c->hpmax = c->hp += (c->hp >> 1) * c->sup;
     c->face = face_dir(lane_x(lane, c->wp) - lane_x(lane, w), lane_y(lane, c->wp) - lane_y(lane, w));
 }
@@ -2273,7 +2273,7 @@ static void lanes_init(void)
                 dist(lane_x(l, k + 1) - lane_x(l, k), lane_y(l, k + 1) - lane_y(l, k));
     for (k = 0; k < NBLD; k++)
         if (slot_tab[k] < B_ANCIENT)
-            bld_s[k] = lane_s(slot_lane(k >= 10, slot_tab[k] >> 1), PX(un[FIRST_BLD + k].x), PX(un[FIRST_BLD + k].y), &off);
+            bld_s[k] = lane_s(slot_lane(k >= 13, slot_tab[k] >> 1), PX(un[FIRST_BLD + k].x), PX(un[FIRST_BLD + k].y), &off);
     cross_s[0] = lane_s(0, 112, 112, &off);
     cross_s[1] = lane_s(1, 512, 512, &off);
 }
@@ -2281,10 +2281,10 @@ static void lanes_init(void)
 /* a team's first standing structure on a lane, from the outside in */
 static u8 outer_bld(u8 team, u8 l)
 {
-    u8 b = FIRST_BLD + times(team, 10) + slot_lane(team, l) * 2;
+    u8 b = FIRST_BLD + times(team, 13) + slot_lane(team, l) * 2;
     if (un[b].on) return b;
     if (un[b + 1].on) return b + 1;
-    return FIRST_BLD + times(team, 10) + B_ANCIENT;
+    return FIRST_BLD + times(team, 13) + B_ANCIENT;
 }
 
 static s16 bld_lane_s(u8 b, u8 l)
@@ -2455,10 +2455,10 @@ static u8 choose_lane1(u8 i)
 {
     u8 team = un[i].team, e = enemy_hero(i), l, k, best = 1;
     s16 hp = 0x7FFF;
-    Unit *A = &un[FIRST_BLD + times(team, 10) + B_ANCIENT];
+    Unit *A = &un[FIRST_BLD + times(team, 13) + B_ANCIENT];
     for (k = 0; k < 2; k++)             /* inner towers first */
         for (l = 0; l < 3; l++) {
-            Unit *b = &un[FIRST_BLD + times(team, 10) + slot_lane(team, l) * 2 + 1 - k];
+            Unit *b = &un[FIRST_BLD + times(team, 13) + slot_lane(team, l) * 2 + 1 - k];
             if (b->on && b->tgt >= FIRST_CREEP) return l;
         }
     for (k = 0; k < tcount[team ^ 1]; k++) {
@@ -3374,10 +3374,10 @@ static void draw_scene(void)
             de_add(y + 8, x - 16, y - 8, 0x0D, ATTR(pal, 0, T_TOWER_B));    /* then the plinth */
             break;
         default:
-            de_add(y + 16, x - 24, y - 24, 0x0A, ATTR(pal, 0, T_ANCIENT));
-            de_add(y + 16, x, y - 24, 0x0A, ATTR(pal, 0, T_ANCIENT + 9));
-            de_add(y + 16, x - 24, y, 0x0A, ATTR(pal, 0, T_ANCIENT + 18));
-            de_add(y + 16, x, y, 0x0A, ATTR(pal, 0, T_ANCIENT + 27));
+            de_add(y + 16, x - 32, y - 50, 0x0F, ATTR(pal, 0, T_MATCH + NA_ANCIENT));      /* 64x64 in four */
+            de_add(y + 16, x, y - 50, 0x0F, ATTR(pal, 0, T_MATCH + NA_ANCIENT + 16));
+            de_add(y + 16, x - 32, y - 18, 0x0F, ATTR(pal, 0, T_MATCH + NA_ANCIENT + 32));
+            de_add(y + 16, x, y - 18, 0x0F, ATTR(pal, 0, T_MATCH + NA_ANCIENT + 48));
         }
     }
     /* the neutral camps: a clearing with a fire, under the creeps */
@@ -3413,7 +3413,7 @@ static void draw_scene(void)
         Unit *v = &un[i];
         if (!v->on || v->hp >= v->hpmax) continue;
         if (v->type == U_TOWER) unit_bar(PX(v->x) - 12, PX(v->y) - 46, 3, v->hp, v->hpmax, v->team + 2);
-        else if (v->type == U_ANCIENT) unit_bar(PX(v->x) - 16, PX(v->y) - 30, 4, v->hp, v->hpmax, v->team + 2);
+        else if (v->type == U_ANCIENT) unit_bar(PX(v->x) - 16, PX(v->y) - 56, 4, v->hp, v->hpmax, v->team + 2);
         else if (v->type == U_ROSH) unit_bar(PX(v->x) - 16, PX(v->y) - 48, 4, v->hp, v->hpmax, 3);
         else if (v->type == U_RAX) unit_bar(PX(v->x) - 12, PX(v->y) - 24, 3, v->hp, v->hpmax, v->team + 2);
         else if (v->team > 1) unit_bar(PX(v->x) - 4, PX(v->y) - 16, 1, v->hp, v->hpmax, 3);
@@ -3903,13 +3903,13 @@ static void match_init(u8 mode)
     }
     for (k = 0; k < NBLD; k++) {
         Unit *b = &un[FIRST_BLD + k];
-        u8 s = slot_tab[k], team = k >= 10;
+        u8 s = slot_tab[k], team = k >= 13;
         b->on = 1;
         b->type = s == B_ANCIENT ? U_ANCIENT : (s >= B_RAX ? U_RAX : U_TOWER);
         b->team = team;
         b->x = FX(team ? WORLD - bld_x[s] : bld_x[s]);
         b->y = FX(team ? WORLD - bld_y[s] : bld_y[s]);
-        b->hpmax = b->hp = b->type == U_ANCIENT ? 2400 : (b->type == U_RAX ? 1300 : 1100);
+        b->hpmax = b->hp = b->type == U_ANCIENT ? 2400 : (b->type == U_RAX ? ((s - B_RAX) & 1 ? 900 : 1300) : 1100);
         b->tgt = -1;
         b->killer = -1;
     }

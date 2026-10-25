@@ -2282,22 +2282,54 @@ def stamp_pit(img, wx, wy):
 
 
 def ancient():
-    b = bmp(48, 48)
-    poly = [(14, 3), (34, 3), (45, 14), (45, 34), (34, 45), (14, 45), (3, 34), (3, 14)]
-    for y in range(48):
-        for x in range(48):
-            if point_in_poly(x + 0.5 - 3, y + 0.5 - 3, poly) and (x + y) % 2 == 0:
-                b[y][x] = 1
-            if point_in_poly(x + 0.5, y + 0.5, poly):
-                b[y][x] = 3 if (x // 6 + y // 6) % 2 else 4
-    for x0, y0 in ((8, 8), (34, 8), (8, 34), (34, 34)):    # corner pylons
-        shade_sphere(b, x0 + 3, y0 + 3, 3.5, [9, 10, 11])
-    shade_sphere(b, 24, 24, 13, [2, 3, 4])
-    for k in range(6):                                      # big crystal star
-        a = k * math.pi / 3
-        line(b, 24, 24, round(24 + math.cos(a) * 11), round(24 + math.sin(a) * 11), 10, 2)
-    shade_sphere(b, 24, 24, 6.5, [9, 10, 11])
-    disc(b, 22, 22, 2, 5)
+    """the Ancient, 64x64, after Dota 2: a stepped round platform of pale stone with pylons at the
+    corners, white stone ribs curving up round a tall crystal spire that glows in the team colour
+    (green for the Radiant, red for the Dire). Its foot is at (32, 50)."""
+    b = bmp(64, 64)
+    shadow(b, 33, 54, 31, 9)
+    ell(b, 32, 51, 29, 11, 2)                              # the lower step: its side, then its top
+    ell(b, 32, 48, 29, 11, 3)
+    for y in range(38, 60):                                # flagstones on the top
+        for x in range(4, 61):
+            if b[y][x] == 3 and ((x * 2 + y * 5) % 11 == 0 or (y - 38) % 5 == 0 and x % 3 == 0):
+                b[y][x] = 4 if x < 32 else 2
+    ell(b, 32, 46, 20, 7.5, 3)                             # the upper step
+    ell(b, 32, 44, 20, 7.5, 4)
+    ell(b, 32, 44, 13, 5, 10)                              # glowing ring round the spire
+    ell(b, 32, 44, 11, 4, 9)
+    for px, py in ((7, 46), (57, 46), (17, 55), (47, 55)):   # corner pylons with glowing tips
+        rect(b, px - 2, py - 10, px + 1, py, 4)
+        rect(b, px, py - 10, px + 1, py, 3)
+        line(b, px + 2, py - 10, px + 2, py, 2)
+        rect(b, px - 3, py, px + 2, py + 1, 2)
+        line(b, px - 2, py - 11, px + 1, py - 11, 3)
+        disc(b, px, py - 13, 1.8, 10)
+        put(b, px - 1, py - 14, 11)
+    # the spire: a tall faceted crystal, lit from the left
+    for y in range(2, 46):
+        t = (y - 2) / 43.0
+        half = 2 + t ** 0.8 * 9
+        for x in range(64):
+            dx = x + 0.5 - 32
+            if abs(dx) <= half:
+                f = dx / half
+                b[y][x] = 11 if f < -0.35 else (10 if f < 0.3 else 9)
+    for y in range(8, 44, 7):                              # facet seams
+        line(b, 32 - int((y - 2) / 43 * 8), y, 32, y + 3, 9)
+        line(b, 32, y + 3, 32 + int((y - 2) / 43 * 8), y, 9)
+    line(b, 31, 3, 31, 40, 11)
+    disc(b, 31, 26, 2.6, 5)                                # the bright heart
+    disc(b, 31, 26, 1.4, 11)
+    # white stone ribs curving up round the spire, two a side
+    for s_ in (-1, 1):
+        X = lambda x: 32 + s_ * x
+        path(b, [(X(19), 44), (X(21), 34), (X(18), 22), (X(13), 14)], 5 if s_ < 0 else 3, 3)
+        path(b, [(X(19), 44), (X(21), 34), (X(18), 22), (X(13), 14)], 4 if s_ < 0 else 2, 1)
+        path(b, [(X(13), 46), (X(15), 36), (X(13), 28), (X(10), 22)], 4 if s_ < 0 else 3, 2)
+        disc(b, X(13), 13.5, 1.6, 10)                       # crystal shards at the rib tips
+        disc(b, X(10), 21.5, 1.2, 11 if s_ < 0 else 10)
+    for x, y in ((24, 6), (41, 9), (20, 30)):              # floating sparks
+        put(b, x, y, 11)
     return add_outline(b)
 
 
@@ -2611,10 +2643,11 @@ def lane_dist(x, y):
 
 
 TOWERS_RAD = [(104, 336), (104, 640), (432, 592), (296, 728), (688, 920), (384, 920)]
-ANCIENT_RAD = (176, 848)
+ANCIENT_RAD = (148, 872)                                 # in the middle of the base
 FOUNTAIN_RAD = (64, 960)
 ROSH_PIT = (288, 288)
-RAX_RAD = [(140, 720), (264, 808), (300, 884)]          # barracks behind the T2s: top, mid, bot
+# barracks inside the base, a melee and a ranged pair flanking each lane's way out: top, mid, bot
+RAX_RAD = [(76, 790), (132, 790), (200, 790), (234, 824), (240, 892), (240, 948)]
 CAMPS_RAD = [(232, 552), (536, 776)]                     # neutral camps in the Radiant jungle
 # jungle trails (pixels): from each camp out to the lanes and the river, so heroes can walk the woods
 TRAILS_RAD = [[(104, 552), (232, 552), (344, 440)], [(232, 552), (300, 660)],
@@ -2979,10 +3012,6 @@ _tw = tower()
 define("T_TOWER", add_sprite(_tw[:32]))          # crown and pillar, 32x32
 define("T_TOWER_B", add_sprite(_tw[32:]))        # plinth, 32x16
 an = ancient()
-define("T_ANCIENT", add_sprite([r[0:24] for r in an[0:24]]))
-add_sprite([r[24:48] for r in an[0:24]])
-add_sprite([r[0:24] for r in an[24:48]])
-add_sprite([r[24:48] for r in an[24:48]])
 for f in range(2):                               # Roshan: stand, slam; 48x48 as four 24x24 sprites
     rb = roshan(f)
     first = add_sprite([r[0:24] for r in rb[0:24]])
@@ -3237,13 +3266,17 @@ for name, fn in (("NA_WOLF", wolf_frame), ("NA_OGRE", ogre_frame)):   # dir * 18
     for d, f in ((0, 1), (1, 0), (1, 1), (2, 0), (2, 1)):
         add_match(fn(d, f))
 define("NA_CAMP", add_match(camp_patch()))
+define("NA_ANCIENT", add_match([r[0:32] for r in an[0:32]]))     # 64x64 as four 32x32 sprites
+add_match([r[32:64] for r in an[0:32]])
+add_match([r[0:32] for r in an[32:64]])
+add_match([r[32:64] for r in an[32:64]])
 define("MATCH_TILES", len(match_tiles))
 assert len(tiles) + 1 + 6 * 16 + 50 + len(match_tiles) <= 1280, ("match art overflows into plane A", len(match_tiles))
 assert len(tiles) + 1 + 9 * 32 <= 1280, ("draft hero frames overflow into plane A", len(tiles))
 
 walk = [0 if cells[y][x] == TREE else 1 for y in range(N) for x in range(N)]
 for k, (bx, by) in enumerate(BUILDINGS):      # 2 + k: open, but next to tower k, which the game makes solid
-    if k % 10 != 6:
+    if k % 13 != 6:
         for y in range(N):
             for x in range(N):
                 nx, ny = min(max(bx, x * 16), x * 16 + 15), min(max(by, y * 16), y * 16 + 15)
@@ -3253,9 +3286,9 @@ for k, (bx, by) in enumerate(BUILDINGS):      # 2 + k: open, but next to tower k
 
 # creep lanes in pixels, from the Radiant Ancient to the Dire Ancient
 LANES_PX = [
-    [(176, 848), (104, 760), (104, 120), (120, 104), (760, 104), (848, 176)],
-    [(176, 848), (256, 768), (768, 256), (848, 176)],
-    [(176, 848), (264, 920), (904, 920), (920, 904), (920, 264), (848, 176)],
+    [(148, 872), (104, 760), (104, 120), (120, 104), (760, 104), (876, 152)],
+    [(148, 872), (256, 768), (768, 256), (876, 152)],
+    [(148, 872), (264, 920), (904, 920), (920, 904), (920, 264), (876, 152)],
 ]
 
 
@@ -3367,9 +3400,9 @@ if os.environ.get("PREVIEW"):
                 for c in range(8):
                     full[ty * 8 + r][tx * 8 + c] = (t[r] >> (28 - c * 4)) & 15
     for k, (bx, by) in enumerate(BUILDINGS):
-        bm = an if k % 10 == 6 else (barracks() if k % 10 > 6 else tower())
+        bm = an if k % 13 == 6 else (barracks() if k % 13 > 6 else tower())
         h, w = len(bm), len(bm[0])
-        oy = h // 2 if k % 10 == 6 else (18 if k % 10 > 6 else 40)
+        oy = 50 if k % 13 == 6 else (18 if k % 13 > 6 else 40)
         for y in range(h):
             for x in range(w):
                 if bm[y][x]:
