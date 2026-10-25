@@ -1933,6 +1933,97 @@ def tower():
     return add_outline(b)
 
 
+def barracks():
+    """a barracks, 24x24: a long stone hall on a plinth under a team-coloured roof, a door in front"""
+    return add_outline([r[4:28] for r in _barracks32()[6:30]])
+
+
+def _barracks32():
+    b = bmp(32, 32)
+    shadow(b, 18, 28, 14, 3)
+    rect(b, 2, 22, 29, 27, 3)                              # plinth
+    rect(b, 2, 22, 29, 22, 4)
+    rect(b, 2, 27, 29, 27, 2)
+    for y in range(12, 23):                                # walls, block courses
+        for x in range(4, 28):
+            c = 4 if x < 7 else (2 if x > 24 else 3)
+            if (y - 12) % 4 == 3 or (x + (4 if (y - 12) // 4 % 2 else 0)) % 8 == 0:
+                c = 2
+            b[y][x] = c
+    for y in range(3, 13):                                 # the roof, lit on the left
+        k = 12 - y
+        for x in range(3 + k // 2, 29 - k // 2):
+            b[y][x] = 11 if x < 16 - k // 3 else (10 if x < 24 - k // 3 else 9)
+    rect(b, 3, 12, 28, 12, 9)
+    line(b, 9, 3, 22, 3, 5)
+    rect(b, 13, 16, 18, 22, 1)                             # door
+    rect(b, 14, 15, 17, 15, 1)
+    for x in (8, 23):                                      # glowing windows
+        rect(b, x, 15, x + 1, 17, 10)
+        put(b, x, 15, 11)
+    for x in (2, 29):                                      # banners
+        line(b, x, 6, x, 21, 2)
+        rect(b, x - 1 if x > 16 else x + 1, 7, x - 1 if x > 16 else x + 1, 12, 10)
+    return b
+
+
+def wolf_frame(d, f):
+    """a grey jungle wolf, 16x16: d 0 = towards us, 1 = away, 2 = east; f = stride"""
+    b = bmp(16, 16)
+    shadow(b, 8, 14, 6, 2)
+    if d == 2:
+        for k, x in enumerate((4, 6, 10, 12)):             # legs, alternating
+            off = (1 if (k + f) % 2 else -1)
+            line(b, x, 10, x + off, 13, 2)
+        ell(b, 8, 9, 5.5, 2.8, 3)
+        rect(b, 4, 7, 11, 7, 4)
+        path(b, [(3, 9), (1, 7), (0, 5)], 3)               # tail up
+        ell(b, 13, 7, 2.6, 2.2, 3)                         # head
+        rect(b, 14, 7, 15, 8, 2)                           # muzzle
+        put(b, 12, 4, 4); put(b, 13, 4, 4)                 # ears
+        put(b, 13, 6, 12)                                  # red eye
+        put(b, 15, 8, 1)
+    else:
+        lift = (0, 1) if f else (1, 0)
+        for k, x in enumerate((5, 10)):
+            rect(b, x, 10 - lift[k], x + 1, 13 - lift[k], 2)
+        ell(b, 8, 9, 4, 3.5, 3)
+        rect(b, 6, 7, 10, 7, 4)
+        if d == 0:
+            ell(b, 8, 6, 3.2, 2.8, 4)
+            rect(b, 7, 7, 9, 9, 3)
+            put(b, 8, 9, 1)
+            put(b, 6, 5, 12); put(b, 10, 5, 12)
+            put(b, 5, 3, 3); put(b, 11, 3, 3)
+        else:
+            path(b, [(8, 12), (9, 14), (8, 15)], 3)
+            ell(b, 8, 5, 3, 2.6, 3)
+            put(b, 6, 2, 4); put(b, 10, 2, 4)
+    return add_outline(b)
+
+
+def ogre_frame(d, f):
+    """a hulking jungle ogre, 16x16, skin brown, a club over the shoulder; f swings it"""
+    b = bmp(16, 16)
+    shadow(b, 8, 14, 6, 2)
+    legs(b, d, f, 8, 11, 14, 2)
+    ell(b, 8, 8, 5.5, 4.2, 7)                              # the belly and chest
+    ell(b, 6.5, 7, 3, 2.5, 6)
+    rect(b, 3, 10, 13, 11, 13)                             # loincloth
+    ell(b, 8 + (1 if d == 2 else 0), 3.5, 2.6, 2.4, 7)
+    if d == 0:
+        put(b, 7, 3, 1); put(b, 9, 3, 1)
+        rect(b, 7, 5, 9, 5, 5)                             # tusks
+    cx = 13 if d != 2 else 12
+    if f:                                                  # club swung down in front
+        line(b, cx - 1, 9, cx + 2, 14, 2, 2)
+        disc(b, cx + 2, 14, 1.6, 3)
+    else:                                                  # club over the shoulder
+        line(b, cx, 9, cx + 1, 2, 2, 2)
+        disc(b, cx + 1, 2, 1.8, 3)
+    return add_outline(b)
+
+
 # ---------------------------------------------------------------- Roshan, runes, the Aegis
 def path(b, pts, c, w=1):
     for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
@@ -2140,7 +2231,7 @@ def raze_frame(f):
             if f == 0:
                 c = 12 if k < 0.4 else 13
             elif f == 1:
-                c = 1 if k < 0.35 else (13 if k < 0.7 else (12 if rnd.random() < 0.5 else 14))
+                c = 1 if k < 0.35 else (13 if k < 0.7 else (12 if rnd.random() < 0.535 else 14))
             else:
                 if rnd.random() < 0.55:
                     continue
@@ -2205,7 +2296,7 @@ def poof(f):
     rnd = random.Random(30 + f)
     for _ in range(18 + f * 6):
         x, y = rnd.uniform(3, 13), rnd.uniform(3, 13)
-        disc(b, x, y, 1.5 + f * 0.6, 3 if rnd.random() < 0.5 else 4)
+        disc(b, x, y, 1.5 + f * 0.6, 3 if rnd.random() < 0.535 else 4)
     if f:
         for y in range(16):
             for x in range(16):
@@ -2403,7 +2494,7 @@ def side(cx, cy):
 
 
 rnd = random.Random(77)
-forest = [[1 if rnd.random() < 0.56 else 0 for _ in range(N)] for _ in range(N)]
+forest = [[1 if rnd.random() < 0.535 else 0 for _ in range(N)] for _ in range(N)]
 for _ in range(4):
     nf = [[0] * N for _ in range(N)]
     for y in range(N):
@@ -2439,13 +2530,28 @@ TOWERS_RAD = [(104, 336), (104, 640), (432, 592), (296, 728), (688, 920), (384, 
 ANCIENT_RAD = (176, 848)
 FOUNTAIN_RAD = (64, 960)
 ROSH_PIT = (288, 288)
+RAX_RAD = [(140, 720), (264, 808), (300, 884)]          # barracks behind the T2s: top, mid, bot
+CAMPS_RAD = [(232, 552), (536, 776)]                     # neutral camps in the Radiant jungle
+# jungle trails (pixels): from each camp out to the lanes and the river, so heroes can walk the woods
+TRAILS_RAD = [[(104, 552), (232, 552), (344, 440)], [(232, 552), (300, 660)],
+              [(536, 920), (536, 776), (640, 680)], [(536, 776), (420, 720)]]
 
 
 def rot(p):
     return (1024 - p[0], 1024 - p[1])
 
 
-BUILDINGS = TOWERS_RAD + [ANCIENT_RAD] + [rot(p) for p in TOWERS_RAD] + [rot(ANCIENT_RAD)]
+BUILDINGS = TOWERS_RAD + [ANCIENT_RAD] + RAX_RAD + [rot(p) for p in TOWERS_RAD + [ANCIENT_RAD] + RAX_RAD]
+CAMPS = CAMPS_RAD + [rot(p) for p in CAMPS_RAD]
+TRAILS = TRAILS_RAD + [[rot(p) for p in t] for t in TRAILS_RAD]
+
+
+def jungle_open(x, y):
+    """cells kept clear for the neutral camps and the trails between them"""
+    px, py = x * 16 + 8, y * 16 + 8
+    if any(math.hypot(px - cx, py - cy) < 44 for cx, cy in CAMPS):
+        return True
+    return any(dseg(px, py, *a, *b_) < 20 for t in TRAILS for a, b_ in zip(t, t[1:]))
 
 clear = [[0] * N for _ in range(N)]     # cells that must stay open (lanes, river, bases, buildings)
 for y in range(N):
@@ -2454,14 +2560,14 @@ for y in range(N):
         rd = dseg(x, y, *RIVER[0], *RIVER[1])
         in_base = (x <= 15 and y >= 48) or (x >= 48 and y <= 15)
         t = forest[y][x]
-        if ld < 2.8 or rd < 2.6 or in_base:
+        if ld < 2.8 or rd < 2.6 or in_base or jungle_open(x, y):
             t = 0
         for bx, by in BUILDINGS:
             if math.hypot(x + 0.5 - bx / 16, y + 0.5 - by / 16) < 3.5:
                 t = 0
         if not t:
             clear[y][x] = forest[y][x]
-            if ld < 2.8 or rd < 2.6 or in_base:
+            if ld < 2.8 or rd < 2.6 or in_base or jungle_open(x, y):
                 clear[y][x] = 1
             for bx, by in BUILDINGS:
                 if math.hypot(x + 0.5 - bx / 16, y + 0.5 - by / 16) < 3.5:
@@ -2801,6 +2907,13 @@ for f in range(2):                               # Roshan: stand, slam; 48x48 as
     add_sprite([r[24:48] for r in rb[0:24]])
     add_sprite([r[0:24] for r in rb[24:48]])
     add_sprite([r[24:48] for r in rb[24:48]])
+for name, fn in (("T_WOLF", wolf_frame), ("T_OGRE", ogre_frame)):   # one frame a direction: they bob as they walk
+    first = None
+    for d in range(3):
+        i = add_sprite(fn(d, 0))
+        first = first or i
+    define(name, first)
+define("T_RAX", add_sprite(barracks()))
 define("ROSH_X", ROSH_PIT[0])
 define("ROSH_Y", ROSH_PIT[1])
 define("T_RUNE", add_sprite(rune(0)))           # 16x16: double damage, haste, regeneration, bounty
@@ -3029,11 +3142,11 @@ for ty in range(10):
             dedupe[t] = len(tiles)
         map_ground[((y0 >> 3) + ty) * 128 + (x0 >> 3) + tx] = dedupe[t]
 assert len(tiles) < 1280, len(tiles)
-assert len(tiles) + 1 + 9 * 18 <= 1280, ("draft hero frames overflow into plane A", len(tiles))
+assert len(tiles) + 1 + 9 * 32 <= 1280, ("draft hero frames overflow into plane A", len(tiles))
 
 walk = [0 if cells[y][x] == TREE else 1 for y in range(N) for x in range(N)]
 for k, (bx, by) in enumerate(BUILDINGS):      # 2 + k: open, but next to tower k, which the game makes solid
-    if k % 7 != 6:
+    if k % 10 != 6:
         for y in range(N):
             for x in range(N):
                 nx, ny = min(max(bx, x * 16), x * 16 + 15), min(max(by, y * 16), y * 16 + 15)
@@ -3156,9 +3269,9 @@ if os.environ.get("PREVIEW"):
                 for c in range(8):
                     full[ty * 8 + r][tx * 8 + c] = (t[r] >> (28 - c * 4)) & 15
     for k, (bx, by) in enumerate(BUILDINGS):
-        bm = an if k % 7 == 6 else tower()
+        bm = an if k % 10 == 6 else (barracks() if k % 10 > 6 else tower())
         h, w = len(bm), len(bm[0])
-        oy = h // 2 if k % 7 == 6 else 40
+        oy = h // 2 if k % 10 == 6 else (18 if k % 10 > 6 else 40)
         for y in range(h):
             for x in range(w):
                 if bm[y][x]:
