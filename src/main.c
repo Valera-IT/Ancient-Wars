@@ -79,6 +79,7 @@ static void vdp_init(void)
 #define T_SKI2 (T_PORT + 9)          /* split screen: the same for the second player */
 #define T_PORT2 (T_SKI2 + 16)
 #define T_MATCH (T_PORT2 + 9)        /* the jungle creeps and the camp, loaded at the match start (the draft uses this room) */
+#define T_CLOCK 1954                 /* match: the clock digits (0xF440, after the 4 bytes of hscroll) */
 #define T_DICON 1984                 /* draft: the skills of the hero under the cursor (0xF800, past the hscroll table) */
 #define T_DHERO(k) ((k) < NHERO - 1 ? T_HSLOT + times(32, k) : T_DICON + 16)   /* draft: stand and attack poses; the last hero's fit up there */
 static void hero_tiles(u8 kind, u8 first, u8 n, u16 dst)
@@ -117,12 +118,40 @@ static void pal_set(u8 n, const u16 *p)
     for (i = 0; i < 16; i++) palbuf[(n << 4) + i] = p[i];
 }
 
+/* day and night: dn_lvl 0 (day) .. 8 (night) takes the red, then the green, then a little of the
+   blue out of the map line; the unit lines get half of it, the UI line none */
+static u8 dn_lvl, pal_dirty;
+static u16 palnow[64];      /* the match palette at dn_lvl, for flush() to copy in the blank */
+
+static u16 pal_color(u8 i)
+{
+    u16 c = palbuf[i];
+    u8 n = dn_lvl;
+    s8 r, g, b;
+    if (!n || (i & 0x30) == 0x10) return c;
+    if (i & 0x20) n >>= 1;
+    r = ((c >> 1) & 7) - (n >> 1);
+    g = ((c >> 5) & 7) - ((n * 3) >> 3);
+    b = ((c >> 9) & 7) - (n >> 3);
+    if (r < 0) r = 0;
+    if (g < 0) g = 0;
+    if (b < 0) b = 0;
+    return (r << 1) | (g << 5) | ((u16)b << 9);
+}
+
+static void pal_night(void)
+{
+    u8 i;
+    for (i = 0; i < 64; i++) palnow[i] = pal_color(i);
+    pal_dirty = 1;
+}
+
 static void pal_upload(u8 lvl)
 {
     u8 i;
     VDP_CTRL32 = CRAM_W(0);
     for (i = 0; i < 64; i++) {
-        u16 c = palbuf[i];
+        u16 c = pal_color(i);
         if (lvl < 8) {
             u16 r = (((c >> 1) & 7) * lvl) >> 3;
             u16 g = (((c >> 5) & 7) * lvl) >> 3;
@@ -369,6 +398,12 @@ static void hero_poses(void);
 static void flush(void)
 {
     wait_vsync();
+    if (pal_dirty) {
+        u8 i;
+        pal_dirty = 0;
+        VDP_CTRL32 = CRAM_W(0);
+        for (i = 0; i < 64; i++) VDP_DATA = palnow[i];
+    }
     dma_vram(sprbuf, SPRTAB, nspr << 2);
     if (in_match) hero_poses();
     if (split) { vsel(0); map_stream(); vsel(1); }
@@ -588,6 +623,38 @@ static void build_lists(void)
         }
 }
 
+/* sight: by day every hero is in plain view; as night falls a team sees an enemy hero only within
+   NIGHT_R px (at full night) of one of its own units. seen[team] has a bit per hero slot; the
+   neutrals (team 2) see everything */
+#define NIGHT_R 128
+static u8 seen[3] = { 0x3F, 0x3F, 0x3F };
+#define SEEN(team, h) ((seen[team] >> (h)) & 1)
+
+static void vision_update(void)
+{
+    s16 r = NIGHT_R + muls(8 - dn_lvl, 40);
+    u8 team;
+    if (!dn_lvl) { seen[0] = seen[1] = 0x3F; return; }
+    for (team = 0; team < 2; team++) {
+        u8 want = 0, got = 0, h, n = tcount[team];
+        const u8 *l = tlist[team];
+        for (h = team ^ 1; h < nh; h += 2)
+            if (un[h].on) want |= 1 << h;
+        while (n-- && got != want) {
+            u8 m = *l++;
+            if (un[m].team != team) continue;       /* Roshan and the camps are in both lists */
+            for (h = team ^ 1; h < nh; h += 2) {
+                s16 dx, dy;
+                if (!((want & ~got) >> h & 1)) continue;
+                dx = cpx[h] - cpx[m];
+                dy = cpy[h] - cpy[m];
+                if (dx < r && dx > -r && dy < r && dy > -r && dist(dx, dy) < r) got |= 1 << h;
+            }
+        }
+        seen[team] = got | (0x3F & ~want);      /* own heroes, and the dead, count as seen */
+    }
+}
+
 /* nearest enemies of unit i in one pass: best[0] = hero, best[1] = creep, best[2] = building,
  * each within r[k]; flags select which kinds to look for (F_HERO, F_CREEP, F_BLD) */
 static void scan(u8 i, const s16 *r, u8 flags, s8 *best)
@@ -608,6 +675,7 @@ static void scan(u8 i, const s16 *r, u8 flags, s8 *best)
         if (dy > lim || dy < -lim) continue;
         kind = ukind[t];
         if (!((flags >> kind) & 1) || !un[t].on) continue;
+        if (!kind && !SEEN(un[i].team, t)) continue;    /* a hero out in the dark */
         d = dist(dx, dy);
         if (kind == 2) {
             if (protected_bld(t)) continue;
@@ -637,7 +705,7 @@ static s8 aggro_hero(u8 i, s16 r)
 {
     u8 t;
     for (t = 0; t < nh; t++)
-        if (un[t].aggro && attackable(t, un[i].team) && udist(i, t) < r)
+        if (un[t].aggro && attackable(t, un[i].team) && SEEN(un[i].team, t) && udist(i, t) < r)
             return t;
     return -1;
 }
@@ -1664,9 +1732,27 @@ static void runes_update(void)
 static void rosh_plan(u8 team);
 
 /* once a second: rune spawns and timers, Roshan's return, the Aegis running out, the bots' plans */
+/* day and night take 5 minutes each; dusk and dawn take 8 seconds, a level a second */
+#define DAY_S 300
+#define NIGHT_S 300
+static u16 dn_sec;
+
+static void day_night(void)
+{
+    u8 want;
+    if (++dn_sec == DAY_S + NIGHT_S) dn_sec = 0;
+    if (dn_sec == DAY_S) msg("NIGHT FALLS", 120);
+    else if (dn_sec == 0) msg("THE SUN RISES", 120);
+    want = dn_sec >= DAY_S ? 8 : 0;
+    if (dn_lvl == want) return;
+    dn_lvl += want ? 1 : -1;
+    pal_night();
+}
+
 static void world_second(void)
 {
     u8 k;
+    day_night();
     if (game_sec & 1) rosh_plan(game_sec & 2 ? 1 : 0);
     if (!--power_t) {                       /* every 2 minutes, at one of the two river spots */
         k = rnd() & 3;
@@ -2436,10 +2522,10 @@ static void bot_shop(u8 i)
    enemy hero, else push the lane with the weakest enemy structure */
 static u8 enemy_hero(u8 i)
 {
-    u8 e = i ^ 1, f;
-    s16 d = un[e].on ? udist(i, e) : 0x7FFF;
+    u8 e = i ^ 1, f, team = i & 1;
+    s16 d = un[e].on && SEEN(team, e) ? udist(i, e) : 0x7FFF;
     for (f = e + 2; f < nh; f += 2)
-        if (un[f].on) {
+        if (un[f].on && SEEN(team, f)) {
             s16 df = udist(i, f);
             if (df < d) { d = df; e = f; }
         }
@@ -2550,7 +2636,7 @@ static void bot_cmd(u8 i, Cmd *c)
     s16 x = PX(U->x), y = PX(U->y), ex = PX(E->x), ey = PX(E->y);
     s16 evx = ex - seen_x[i], evy = ey - seen_y[i];      /* enemy movement over 4 frames */
     s8 dir = (i & 1) ? -1 : 1, t;
-    s16 ed = E->on ? dist(ex - x, ey - y) : 999;
+    s16 ed = E->on && SEEN(i & 1, e) ? dist(ex - x, ey - y) : 999;     /* at night: only the ones in sight */
     u8 et, busy, dived;
     s16 front, want, lim, own;
 
@@ -2902,6 +2988,7 @@ static void split_menu(u8 xo, u8 k)
     textW(xo, 24 + k, b);
 }
 
+static void wtile(u8 x, u8 y, u16 attr);
 static void split_row23(void)
 {
     char b[44];
@@ -2937,7 +3024,6 @@ static void split_row23(void)
     textW((40 - j) >> 1, 23, b);
 }
 
-static void wtile(u8 x, u8 y, u16 attr);
 static void wicon(u8 x, u8 y, u16 attr);
 static void abilities(u8 x0, u8 step, u16 tski);
 
@@ -3083,21 +3169,19 @@ static void hud_part1(u8 part)
         for (; n < 6; n++) wicon(sx[n], sy[n], ATTR(2, 1, T_SLOT0));
         return;
     }
-    if (!split) {                       /* the top panel: a big clock between the team kills */
+    if (!split) {                       /* at the top: a big clock between the team kills, over the map */
         u8 kills[2] = { 0, 0 };
         for (k = 0; k < nh; k++) kills[k & 1] += hr[k].kills;
         clock_text(b);
         for (k = 0; k < 5; k++) {
             u8 d = b[k] == ':' ? 10 : b[k] - '0';
             VDP_CTRL32 = VRAM_W(PLANE_A + (18 + k) * 2);
-            VDP_DATA = ATTR(1, 1, T_BIGD + (d << 1));
+            VDP_DATA = ATTR(1, 1, T_CLOCK + (d << 1));
             VDP_CTRL32 = VRAM_W(PLANE_A + 128 + (18 + k) * 2);
-            VDP_DATA = ATTR(1, 1, T_BIGD + (d << 1) + 1);
+            VDP_DATA = ATTR(1, 1, T_CLOCK + (d << 1) + 1);
         }
-        afont = T_FONTW;
         num(kills[0], 2, b); textA(15, 0, b);
         num(kills[1], 2, b); textA(24, 0, b);
-        afont = T_FONT;
     }
 }
 
@@ -3146,7 +3230,6 @@ static void hud_static(void)
         for (x = 0; x < 3; x++) wtile(5 + x, 24 + y, ATTR(hero_pal[hk[view]], 1, T_PORT + times(3, x) + y));
     for (y = 0; y < 3; y++) wtile(11, 24 + y, ATTR(1, 1, T_HICON + y));
     for (y = HUD_Y; y < 28; y++) { wtile(19, y, ATTR(1, 1, T_FRAME + 1)); wtile(31, y, ATTR(1, 1, T_FRAME + 1)); }
-    panelA(14, 26, 0, 1);
     afont = T_FONT;
 }
 
@@ -3293,6 +3376,10 @@ static void unit_bar(s16 x, s16 y, u8 cells, s16 hp, s16 hpmax, u8 pal)
 static const u8 sdir_of[8] = { 2, 0, 0, 0, 2, 1, 1, 1 };
 static const u8 hdir_of[8] = { 2, 3, 0, 3, 2, 4, 1, 4 };   /* heroes: S, N, E, SE, NE; the west half h-flipped */
 
+/* the team whose sight the picture shows: the player's (in split screen, the selected view's), or 2 for all */
+static u8 vteam;
+#define HIDDEN(h) (vteam < 2 && !SEEN(vteam, h))
+
 static void draw_minimap(void)
 {
     u8 i;
@@ -3300,7 +3387,7 @@ static void draw_minimap(void)
         Unit *v = &un[i];
         if (!v->on) continue;
         if (i < NH) {
-            if (i == view && (vcount & 16)) continue;
+            if ((i == view && (vcount & 16)) || HIDDEN(i)) continue;
             spr((PX(v->x) >> 5) - 2, HUD_Y * 8 + (PX(v->y) >> 5) - 2, 0, ATTR(v->team + 2, 1, T_MARK + 1));
         } else
             spr((PX(v->x) >> 5) - 1, HUD_Y * 8 + (PX(v->y) >> 5) - 1, 0, ATTR(v->team + 2, 1, T_MARK));
@@ -3328,6 +3415,7 @@ static void draw_scene(void)
         switch (v->type) {
         case U_HERO: {           /* heroes keep their own colours on either side */
             Hero *H = &hr[i];
+            if (HIDDEN(i)) break;
             pal = hero_pal[hk[i]];
             u8 f = (v->wind || H->chan_t || H->cast_lock || H->hook_st == 1) ? 2 : ((v->anim >> 3) & 1);
             if (v->stun && (vcount & 4)) break;
@@ -3394,7 +3482,7 @@ static void draw_scene(void)
         }
     /* hero bars above everything, with the rune in effect and the Aegis beside them */
     for (i = 0; i < nh; i++)
-        if (un[i].on) {
+        if (un[i].on && !HIDDEN(i)) {
             s16 hx = PX(un[i].x), hy = PX(un[i].y);
             unit_bar(hx - 12, hy - 30, 3, un[i].hp, un[i].hpmax, un[i].team + 2);
             if (hr[i].rune_t) wspr(hx - 21, hy - 32, 0, ATTR(2, 1, T_RUNEM + hr[i].rune));
@@ -3437,7 +3525,7 @@ static void draw_scene(void)
                 wspr(ux + (sx >> 6) - 4, uy + (sy >> 6) - 4, 0, ATTR(2, 0, T_CHAIN));
             }
         }
-        if (H->rot)
+        if (H->rot && !HIDDEN(h))
             for (i = 0; i < 4; i++) {
                 u8 a = (u8)((game_t << 1) + (i << 4));
                 wspr(ux + ((sintab[a & 63] * 24) >> 6) - 4, uy + 8 + ((sintab[(a + 16) & 63] * 16) >> 6) - 4,
@@ -3501,7 +3589,7 @@ static void draw_scene(void)
         }
     }
     /* SF channel aura */
-    for (h = 0; h < nh; h++) if (hk[h] == K_SF && un[h].on && hr[h].chan_t)
+    for (h = 0; h < nh; h++) if (hk[h] == K_SF && un[h].on && hr[h].chan_t && !HIDDEN(h))
         for (i = 0; i < 6; i++) {
             u8 a = (u8)((game_t << 2) + i * 11);
             wspr(PX(un[h].x) + ((sintab[a & 63] * 20) >> 6) - 4,
@@ -3518,6 +3606,7 @@ static void draw_world(void)
         u8 k, j;
         flip ^= 1;
         vsel(flip);
+        vteam = port_of[0] == flip ? 0 : 1;
         sc_rec = flip;
         scn[flip] = 0;
         draw_scene();
@@ -3535,6 +3624,7 @@ static void draw_world(void)
             }
         }
     } else {
+        vteam = me < 2 ? me & 1 : 2;
         draw_minimap();
         draw_scene();
     }
@@ -3925,6 +4015,8 @@ static void match_init(u8 mode)
         u16 w;
         VDP_CTRL32 = VRAM_W(T_MATCH << 5);
         for (w = 0; w < MATCH_TILES * 8; w++) VDP_DATA32 = match_art[w];
+        VDP_CTRL32 = VRAM_W(T_CLOCK << 5);
+        for (w = 0; w < CLOCK_TILES * 8; w++) VDP_DATA32 = clock_art[w];
     }
     memset(rune_on, 0, sizeof(rune_on));
     rune_spawn(2, R_BOUNTY);            /* bounty runes at the horn, power runes from 2:00 */
@@ -3943,6 +4035,8 @@ static void match_init(u8 mode)
     }
     winner = 0;
     game_t = game_sec = sec_f = 0;
+    dn_sec = dn_lvl = 0;
+    seen[0] = seen[1] = 0x3F;
     stc = half = bot_ph = 0;
     pad_acc[0] = pad_acc[1] = 0;
     wave_t = 150;
@@ -4262,6 +4356,7 @@ static void match(u8 mode)
                 world_second();
             }
             build_lists();
+            if ((stc & 3) == 0) vision_update();
             if ((wave_t -= DT) == 0) {
                 spawn_wave();
                 wave_t = 1800;
@@ -4308,6 +4403,7 @@ int main(void)
         title();
         match(pick());
         in_match = 0;
+        dn_lvl = 0;         /* the menus by day */
     }
     return 0;
 }

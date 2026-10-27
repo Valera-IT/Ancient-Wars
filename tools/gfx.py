@@ -2598,6 +2598,13 @@ def big_digit(ch):
     g = glyph_tile(ch)
     return [[c or 13 for c in g[y >> 1]] for y in range(16)]
 
+
+def clock_digit(ch):
+    """8x16 digit for the match clock: the same glyph on a see-through field, outlined for the map behind"""
+    g = glyph_tile(ch)
+    return add_outline([list(g[y >> 1]) for y in range(16)])
+
+
 # ---------------------------------------------------------------- map layout (64x64 cells of 16 px)
 N = 64
 GRASS, TREE, ROAD, WATER, BASE = range(5)
@@ -3271,6 +3278,12 @@ add_match([r[32:64] for r in an[0:32]])
 add_match([r[0:32] for r in an[32:64]])
 add_match([r[32:64] for r in an[32:64]])
 define("MATCH_TILES", len(match_tiles))
+# the match clock: "0".."9", ":" as 8x16, two tiles each; loaded at the match start past the hscroll table
+clock_tiles = []
+for ch in "0123456789:":
+    d = clock_digit(ch)
+    clock_tiles += [tile_at(d, 0, 0), tile_at(d, 0, 1)]
+define("CLOCK_TILES", len(clock_tiles))
 assert len(tiles) + 1 + 6 * 16 + 50 + len(match_tiles) <= 1280, ("match art overflows into plane A", len(match_tiles))
 assert len(tiles) + 1 + 9 * 32 <= 1280, ("draft hero frames overflow into plane A", len(tiles))
 
@@ -3375,6 +3388,7 @@ out.append(carr("hero_art", "u32", [v for t in hero_tiles for v in t], 8, "0x{:0
 out.append(carr("hero_port", "u32", [v for t in hero_port for v in t], 8, "0x{:08X}"))
 out.append(carr("skill_icons", "u32", [v for t in skill_icon_tiles for v in t], 8, "0x{:08X}"))
 out.append(carr("match_art", "u32", [v for t in match_tiles for v in t], 8, "0x{:08X}"))
+out.append(carr("clock_art", "u32", [v for t in clock_tiles for v in t], 8, "0x{:08X}"))
 out.append("#endif")
 with open(OUT, "w") as f:
     f.write("\n".join(out) + "\n")
