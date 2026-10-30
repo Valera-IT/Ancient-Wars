@@ -3700,7 +3700,7 @@ static void title(void)
     flush();
     display(1);
     fade(1);
-    music_play(0, 6);
+    music_play(0, 7);
     for (;;) {
         flush();
         read_pads();
