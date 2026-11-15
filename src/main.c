@@ -502,6 +502,7 @@ static Fx fxs[NFX];
 static u8 hk[NH] = { K_SF, K_PUDGE, K_AXE, K_SF, K_LINA, K_CM };
 static u8 port_of[NH] = { 0, 1, 2, 2, 2, 2 };   /* controller port driving each hero */
 static u8 versus;   /* two players on two pads, split screen */
+static u8 sf_mid;   /* Shadow Fiend mid duel */
 static u8 me, view, winner, msg_t, first_blood, waves, shop_open, shop_sel, paused, board, learn_open;
 static u16 game_t, wave_t, game_sec;   /* game_t wraps after 18 minutes, game_sec does not */
 /* the game logic steps at 30 Hz: game_t still counts 60 Hz frames (+DT a step), timers are kept in
@@ -1154,6 +1155,7 @@ static void kill_unit(u8 t, s8 src)
         }
         break;
     case U_TOWER:
+        if (sf_mid && !winner) winner = eteam + 1;
         for (k = 0; k < nh; k++)
             if (un[k].team == eteam) { hr[k].gold += 160; hr[k].earned += 160; }
         hr[eteam].towers++;      /* slots 0/1 hold the team totals */
@@ -1225,6 +1227,7 @@ static void kill_unit(u8 t, s8 src)
         hr[e].gold += 200 + H->lvl * 12;
         hr[e].earned += 200 + H->lvl * 12;
         hr[e].kills++;
+        if (sf_mid && !winner && hr[e].kills >= 2) winner = eteam + 1;
         if (hk[e] == K_SF) { hr[e].souls += 2; if (hr[e].souls > souls_max(e)) hr[e].souls = souls_max(e); }
         if (hk[e] == K_PUDGE && un[e].on && udist(e, t) < 160) {
             hr[e].heap++;
@@ -1433,6 +1436,7 @@ static void spawn_wave(void)
     u8 team, lane, k;
     for (team = 0; team < 2; team++)
         for (lane = 0; lane < 3; lane++) {
+            if (sf_mid && lane != 1) continue;
             for (k = 0; k < 2; k++) spawn_creep(team, U_MELEE, lane, k);
             spawn_creep(team, U_RANGED, lane, 2 + (lane & 1));
         }
@@ -2542,6 +2546,7 @@ static u8 choose_lane1(u8 i)
     u8 team = un[i].team, e = enemy_hero(i), l, k, best = 1;
     s16 hp = 0x7FFF;
     Unit *A = &un[FIRST_BLD + times(team, 13) + B_ANCIENT];
+    if (sf_mid) return 1;
     for (k = 0; k < 2; k++)             /* inner towers first */
         for (l = 0; l < 3; l++) {
             Unit *b = &un[FIRST_BLD + times(team, 13) + slot_lane(team, l) * 2 + 1 - k];
@@ -2730,6 +2735,24 @@ static void bot_cmd(u8 i, Cmd *c)
     /* a jungle camp on us: finish it */
     for (k = NEUT; k < NU; k++)
         if (un[k].on && un[k].tgt == (s8)i) { c->tgt = k; return; }
+
+    /* Do not stand taking creep fire while waiting for a last hit. Fight the
+       closest attacker unless doing so would pull us into an unoccupied tower. */
+    {
+        s16 best = 145;
+        t = -1;
+        for (k = FIRST_CREEP; k < ROSH; k++) {
+            Unit *v = &un[k];
+            s16 d;
+            if (!v->on || v->team == U->team || v->tgt != (s8)i) continue;
+            d = udist(i, k);
+            if (d >= best) continue;
+            if (!busy && un[et].on && udist(et, k) < 120) continue;
+            best = d;
+            t = k;
+        }
+        if (t >= 0) { c->tgt = t; return; }
+    }
 
     /* last hits and denies */
     t = cs_target(i, 130, hk[i] == K_SF ? 6 : 2);
@@ -3700,7 +3723,7 @@ static void title(void)
     flush();
     display(1);
     fade(1);
-    music_play(0, 7);
+    music_play(0, 10);
     for (;;) {
         flush();
         read_pads();
@@ -3750,7 +3773,7 @@ static void save_load(void)
     for (k = 0; k < SAVE_LEN; k++) b[k] = SRAM_B(k);
     if (b[0] == 'A' && b[1] == 'W' && b[2] == 5 && b[SV_SUM] == save_sum(b) &&
         b[SV_HERO] < NHERO && b[SV_ENEMY] < NHERO && b[SV_SIDE] < 2 && b[SV_2V2] < 3 &&
-        b[SV_ALLY] < NHERO && b[SV_EN2] < NHERO && b[SV_GAME] < 3 && b[SV_ALLY2] < NHERO && b[SV_EN3] < NHERO)
+        b[SV_ALLY] < NHERO && b[SV_EN2] < NHERO && b[SV_GAME] < 5 && b[SV_ALLY2] < NHERO && b[SV_EN3] < NHERO)
         for (k = 0; k < SAVE_LEN; k++) save[k] = b[k];
 }
 
@@ -3766,7 +3789,7 @@ static void save_write(void)
    Returns 0 to go on to the draft */
 static void mode_screen(void)
 {
-    static const char *const games[3] = { "1 PLAYER", "2P SPLITSCREEN", "BOT VS BOT" };
+    static const char *const games[5] = { "1 PLAYER", "2P SPLITSCREEN", "BOT VS BOT", "SF MID VS BOT", "SF MID 2P SPLIT" };
     static const char *const teams[3] = { "1V1", "2V2 WITH BOTS", "3V3 WITH BOTS" };
     u8 row = 0, y;
     u16 t = 0;
@@ -3785,15 +3808,16 @@ static void mode_screen(void)
         textW(2, 24, b);
     }
     textW(2, 25, "UP/DOWN: CHOOSE   LEFT/RIGHT: CHANGE");
-    textW(2, 26, "A OR START: PICK HEROES");
+    textW(2, 26, "A OR START: CONTINUE");
+    textW(2, 27, "SF MID: 2 KILLS OR FIRST TOWER");
     fade(1);
     for (;;) {
         u16 n;
         s8 dx = 0;
-        if (save[SV_GAME] == 1) save[SV_2V2] = 0;          /* split screen is always 1v1 */
+        if (save[SV_GAME] == 1 || save[SV_GAME] >= 3) save[SV_2V2] = 0;          /* split screen is always 1v1 */
         pick_row(10, "GAME   ", games[save[SV_GAME]]);
         pick_row(11, "TEAMS  ", teams[save[SV_2V2]]);
-        pick_row(12, "SIDE   ", save[SV_GAME] == 1 ? (save[SV_SIDE] ? "P1 DIRE" : "P1 RADIANT")
+        pick_row(12, "SIDE   ", (save[SV_GAME] == 1 || save[SV_GAME] == 4) ? (save[SV_SIDE] ? "P1 DIRE" : "P1 RADIANT")
                                                    : (save[SV_SIDE] ? "DIRE" : "RADIANT"));
         pick_row(13, "TIPS   ", save[SV_TIPS] ? "ON" : "OFF");
         flush();
@@ -3805,8 +3829,8 @@ static void mode_screen(void)
         if (n & B_LEFT) dx = -1;
         if (n & B_RIGHT) dx = 1;
         if (dx) {
-            if (row == 0) save[SV_GAME] = dx > 0 ? (save[SV_GAME] == 2 ? 0 : save[SV_GAME] + 1) : (save[SV_GAME] ? save[SV_GAME] - 1 : 2);
-            else if (row == 1 && save[SV_GAME] != 1)
+            if (row == 0) save[SV_GAME] = dx > 0 ? (save[SV_GAME] == 4 ? 0 : save[SV_GAME] + 1) : (save[SV_GAME] ? save[SV_GAME] - 1 : 4);
+            else if (row == 1 && save[SV_GAME] != 1 && save[SV_GAME] < 3)
                 save[SV_2V2] = dx > 0 ? (save[SV_2V2] == 2 ? 0 : save[SV_2V2] + 1) : (save[SV_2V2] ? save[SV_2V2] - 1 : 2);
             else if (row == 2) save[SV_SIDE] ^= 1;
             else if (row == 3) { save[SV_TIPS] ^= 1; if (save[SV_TIPS]) save[SV_SEEN] = 0; }   /* on = replay them */
@@ -3946,18 +3970,22 @@ static u8 pick(void)
 {
     u8 side, game;
     save_load();                /* re-read: a web emulator may restore SRAM after boot */
-    do mode_screen(); while (draft());
+    do {
+        mode_screen();
+        if (save[SV_GAME] >= 3) break;
+    } while (draft());
     save_write();
     side = save[SV_SIDE];
     game = save[SV_GAME];
-    nh = game == 1 ? 2 : (save[SV_2V2] + 1) << 1;
-    hk[side] = save[SV_HERO];
-    hk[side ^ 1] = save[SV_ENEMY];
+    sf_mid = game >= 3;
+    nh = (game == 1 || sf_mid) ? 2 : (save[SV_2V2] + 1) << 1;
+    hk[side] = sf_mid ? K_SF : save[SV_HERO];
+    hk[side ^ 1] = sf_mid ? K_SF : save[SV_ENEMY];
     hk[side + 2] = save[SV_ALLY];
     hk[(side ^ 1) + 2] = save[SV_EN2];
     hk[side + 4] = save[SV_ALLY2];
     hk[(side ^ 1) + 4] = save[SV_EN3];
-    return game == 1 ? 3 : (game == 2 ? 2 : side);
+    return (game == 1 || game == 4) ? 3 : (game == 2 ? 2 : side);
 }
 
 static u8 tip_t;

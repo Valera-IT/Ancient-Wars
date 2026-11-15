@@ -109,80 +109,51 @@ def build(chords, roots, triads, melody, drums):
     return bass, lead, arp, drum
 
 
-def build_march_at_iron_gate():
-    """Builds "March at the Iron Gate" (D minor, 135 BPM battle theme).
-
-    Uses:
-    - Pattern 1: String Ostinato (16th notes on channel 2)
-    - Pattern 2: Heavy 8th-note bassline on channel 0
-    - Pattern 3: Climax Brass Lead (bars 0-7) + Soaring High Climax (bars 8-15) on channel 1
-    """
-    bass_4bars = [
-        ["D2", "D2", "D2", "D2", "D2", "D2", "F2", "E2"],
-        ["A#1", "A#1", "A#1", "A#1", "A#1", "A#1", "C2", "D2"],
-        ["G1", "G1", "G1", "G1", "G1", "G1", "A1", "A#1"],
-        ["A1", "A1", "A1", "A1", "A2", "G2", "F2", "E2"],
+def build_battle_theme():
+    """A dark, processional 16-bar fantasy battle theme for the YM2612."""
+    chords = ["Dm", "Dm", "Bb", "A", "Dm", "F", "Gm", "A",
+              "Bb", "F", "C", "Dm", "Gm", "Bb", "A", "A"]
+    melody = [
+        [("D4", 8), ("A4", 4), ("F4", 4)],
+        [("D5", 6), ("C5", 2), ("A4", 8)],
+        [("A#4", 8), ("D5", 4), ("F5", 4)],
+        [("E5", 6), ("D5", 2), ("C#5", 8)],
+        [("D5", 8), ("A4", 4), ("F4", 4)],
+        [("F4", 4), ("A4", 4), ("C5", 8)],
+        [("D5", 8), ("A#4", 4), ("G4", 4)],
+        [("A4", 8), ("C#5", 4), ("E5", 4)],
+        [("F5", 8), ("D5", 4), ("A#4", 4)],
+        [("C5", 8), ("F5", 4), ("A5", 4)],
+        [("G5", 8), ("E5", 4), ("C5", 4)],
+        [("D5", 12), ("A4", 4)],
+        [("G4", 4), ("A#4", 4), ("D5", 8)],
+        [("F5", 8), ("D5", 4), ("A#4", 4)],
+        [("E5", 8), ("C#5", 4), ("A4", 4)],
+        [("C#5", 8), ("E5", 4), ("A4", 4)],
     ]
-
-    arp_4bars = [
-        ["D4", "A4", "F4", "A4"] * 4,
-        ["A#3", "F4", "D4", "F4"] * 4,
-        ["G3", "D4", "A#3", "D4"] * 4,
-        ["A3", "E4", "C#4", "E4"] * 2 + ["A3", "G4", "E4", "C#4"] + ["A3", "G3", "F3", "E3"],
-    ]
-
-    melody_8bars = [
-        [("D5", 6), ("A4", 2), ("F4", 4), ("D4", 4)],
-        [("A#4", 6), ("A4", 2), ("G4", 4), ("F4", 2), ("G4", 2)],
-        [("A4", 6), ("E4", 2), ("C#4", 4), ("A3", 4)],
-        [("D4", 2), ("E4", 2), ("F4", 2), ("G4", 2), ("A4", 8)],
-        [("D5", 6), ("F5", 2), ("E5", 4), ("D5", 4)],
-        [("C#5", 6), ("E5", 2), ("D5", 4), ("A#4", 4)],
-        [("G4", 4), ("A4", 4), ("A#4", 4), ("E4", 4)],
-        [("D4", 16)],
-    ]
-
-    melody_climax = [
-        [("D5", 6), ("A5", 2), ("F5", 4), ("D5", 4)],
-        [("A#5", 6), ("A5", 2), ("G5", 4), ("F5", 2), ("G5", 2)],
-        [("A5", 6), ("E5", 2), ("C#5", 4), ("A4", 4)],
-        [("D5", 2), ("E5", 2), ("F5", 2), ("G5", 2), ("A5", 8)],
-        [("D6", 6), ("F6", 2), ("E6", 4), ("D6", 4)],
-        [("C#6", 6), ("E6", 2), ("D6", 4), ("A#5", 4)],
-        [("G5", 4), ("A5", 4), ("A#5", 4), ("E5", 4)],
-        [("D5", 12), ("E5", 2), ("C#5", 2)],
-    ]
-
-    melody_16bars = melody_8bars + melody_climax
-
     bass, lead, arp, drum = [], [], [], []
-    for bar in range(16):
-        # Bass: 8 notes per bar (2 steps each: note on, keyoff)
-        for n in bass_4bars[bar % 4]:
-            bass.append(midi(n))
-            bass.append(1)
-
-        # Arp: 16 notes per bar (1 step each)
-        for n in arp_4bars[bar % 4]:
-            arp.append(midi(n))
-
-        # Lead:
-        notes = melody_16bars[bar]
-        for n, d in notes:
-            lead.append(midi(n))
-            lead += [0] * (d - 2)
-            lead.append(1 if d >= 4 else 0)
-
-        # Drums:
-        pat = DRUMS2[1] if bar % 4 == 3 else DRUMS2[0]
-        drum += [pat.get(s, 0) for s in range(16)]
-
-    for arr in (bass, lead, arp, drum):
-        assert len(arr) == 256
+    for bar, chord in enumerate(chords):
+        root = midi(ROOT_NOTE[chord])
+        triad = [midi(n) - 12 for n in TRIAD[chord]]
+        for step in range(16):
+            bass.append(root if step in (0, 8) else root + 7 if step == 12 else 1 if step in (6, 11, 15) else 0)
+            # Low sustained harmony, alternating chord tones, leaves space around the lead.
+            arp.append(triad[(bar + (step == 8)) % 3] if step in (0, 8) else 1 if step in (6, 14) else 0)
+            beat = {0: 1, 4: 4, 8: 1, 12: 2}.get(step, 0)
+            if bar % 4 == 3 and step in (14, 15):
+                beat = 2
+            drum.append(beat)
+        assert sum(duration for _, duration in melody[bar]) == 16, bar
+        for note, duration in melody[bar]:
+            lead.append(midi(note))
+            lead.extend([0] * (duration - 2))
+            lead.append(1)
+    for channel in (bass, lead, arp, drum):
+        assert len(channel) == 256
     return bass, lead, arp, drum
 
 
-songs = [build(CHORDS, ROOT_NOTE, TRIAD, MELODY, DRUMS1), build_march_at_iron_gate()]
+songs = [build_battle_theme(), build(CHORDS, ROOT_NOTE, TRIAD, MELODY, DRUMS2)]
 
 
 def carr(name, values):
